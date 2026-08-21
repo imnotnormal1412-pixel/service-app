@@ -18,55 +18,55 @@ if 'history' not in st.session_state:
     st.session_state.history = []
 
 st.title("✂️ Система розрахунку послуг")
-st.markdown("Робоче місце для оформлення замовлень")
 
-# 1. Поле введення тексту (працює ідеально і з телефона, і з ПК!)
-search_query = st.text_input("🔍 Введіть назву послуги (пошук або додавання)", placeholder="Почніть писати...")
+# Робимо перемикач: Вибрати з готового чи Додати свою
+tab1, tab2 = st.tabs(["✨ Обрати з прайсу", "➕ Додати нову послугу"])
 
-# Шукаємо збіги в базі за тим, що вводить користувач
-matched_services = {}
-if search_query.strip():
-    query_clean = search_query.strip().lower()
-    matched_services = {name: price for name, price in st.session_state.services.items() if query_clean in name}
-else:
-    matched_services = st.session_state.services
+with tab1:
+    st.subheader("Швидкий вибір послуги")
+    service_list = list(st.session_state.services.keys())
+    
+    # Використовуємо звичайний список для мобільних (натискаєш і обираєш зі списку одним пальцем)
+    chosen_service = st.selectbox("Оберіть послугу зі списку:", service_list, key="mobile_select")
+    
+    current_price = float(st.session_state.services[chosen_service])
+    qty = st.number_input("Кількість / Години", min_value=0.1, value=1.0, step=0.5, key="qty_1")
+    price = st.number_input("Ціна за од. (грн)", min_value=0.0, value=current_price, step=10.0, key="price_1")
 
-# 2. Виводимо підказки або вибір на основі того, що вбили
-selected_service = ""
-default_price = 0.0
-
-if matched_services:
-    # Якщо знайшли збіги, даємо можливість обрати з відфільтрованого списку
-    service_names = list(matched_services.keys())
-    chosen = st.selectbox("Оберіть із підказок:", service_names)
-    selected_service = chosen
-    default_price = float(matched_services[chosen])
-else:
-    # Якщо в базі немає такого — це нова послуга
-    selected_service = search_query.strip().lower()
-    st.info("💡 Такої послуги ще немає в базі. Вона буде додана як нова.")
-
-qty = st.number_input("Кількість / Години", min_value=0.1, value=1.0, step=0.5)
-price = st.number_input("Ціна за одиницю (грн)", min_value=0.0, value=default_price, step=10.0)
-
-# Кнопка додавання до чека
-if st.button("Додати до чека", type="primary"):
-    if selected_service:
-        # Зберігаємо/оновлюємо в загальну базу
-        clean_key = selected_service.strip().lower()
-        st.session_state.services[clean_key] = price
-        
+    if st.button("Додати до чека", type="primary", key="btn_1"):
         total = qty * price
         st.session_state.cart.append({
-            "name": clean_key, 
+            "name": chosen_service, 
             "price": price, 
             "qty": qty, 
             "total": total
         })
-        st.success(f"Додано: {clean_key} ({qty} од.)")
+        st.success(f"Додано: {chosen_service} ({qty} од.)")
         st.rerun()
-    else:
-        st.error("Введіть або оберіть послугу.")
+
+with tab2:
+    st.subheader("Створення кастомної послуги")
+    custom_name = st.text_input("Введіть назву послуги вручну", placeholder="Наприклад: ламінування")
+    custom_qty = st.number_input("Кількість / Години", min_value=0.1, value=1.0, step=0.5, key="qty_2")
+    custom_price = st.number_input("Ціна за од. (грн)", min_value=0.0, value=0.0, step=10.0, key="price_2")
+
+    if st.button("Зберегти і додати до чека", type="primary", key="btn_2"):
+        if custom_name.strip() and custom_price > 0:
+            clean_name = custom_name.strip().lower()
+            # Додаємо в загальну базу на майбутнє
+            st.session_state.services[clean_name] = custom_price
+            
+            total = custom_qty * custom_price
+            st.session_state.cart.append({
+                "name": clean_name, 
+                "price": custom_price, 
+                "qty": custom_qty, 
+                "total": total
+            })
+            st.success(f"Додано нову послугу: {clean_name}")
+            st.rerun()
+        else:
+            st.error("Будь ласка, введіть назву та ціну.")
 
 # Відображення поточного чека
 st.markdown("---")
