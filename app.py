@@ -9,10 +9,11 @@ if 'services' not in st.session_state:
         "Установка розетки": {"category": "Послуги", "price": 200},
         "Установка вхідного дзвінка": {"category": "Послуги", "price": 400},
         "Розетка подвійна": {"category": "Матеріали", "price": 250},
-        "Люстра": {"category": "Матеріали", "price": 50},
+        "Люстра": {"category": "Матеріали", "price": 1500},
         "Розетка одинарна": {"category": "Матеріали", "price": 150},
-        "Виїзд майстра": {"category": "Інше", "price": 100},
-
+        "Виїзд майстра": {"category": "Інше", "price": 500},
+        "знижка постійному клієнту": {"category": "Знижки", "price": 50},
+        "акція вихідного дня": {"category": "Знижки", "price": 100}
     }
 
 if 'cart' not in st.session_state:
@@ -26,8 +27,8 @@ master_name = st.text_input("👤 Хто оформлює замовлення (
 
 st.markdown("---")
 
-# 1. Вибираємо категорію
-categories = ["Послуги", "Матеріали", "Інше"]
+# 1. Вибираємо категорію (тепер тут є і "Знижки")
+categories = ["Послуги", "Матеріали", "Інше", "Знижки"]
 selected_category = st.selectbox("Оберіть категорію:", categories)
 
 # Фільтруємо послуги за обраною категорією
@@ -40,43 +41,46 @@ if service_options:
 else:
     selected_service = None
     current_price = 0.0
-    st.info("У цій категорії поки немає послуг.")
+    st.info("У цій категорії поки немає позицій.")
 
 # Можливість змінити кількість та ціну
 qty = st.number_input("Кількість / Години", min_value=0.1, value=1.0, step=0.5)
 price = st.number_input("Ціна за одиницю (грн)", min_value=0.0, value=current_price, step=10.0)
 
-# Блок додавання нової послуги в певну категорію
-with st.expander("➕ Додати нову послугу в базу"):
-    new_name = st.text_input("Назва нової послуги")
-    new_cat = st.selectbox("Категорія для нової послуги:", categories, key="new_cat_select")
-    new_price = st.number_input("Ціна за одиницю (грн)", min_value=0.0, value=0.0, key="new_price_input")
+# Блок додавання нової послуги чи знижки
+with st.expander("➕ Додати нову послугу або знижку в базу"):
+    new_name = st.text_input("Назва (наприклад, 'знижка 10% або назва акції')")
+    new_cat = st.selectbox("Категорія:", categories, key="new_cat_select")
+    new_price = st.number_input("Сума (грн)", min_value=0.0, value=0.0, key="new_price_input")
     
-    if st.button("Зберегти нову послугу"):
+    if st.button("Зберегти в базу"):
         if new_name.strip() and new_price > 0:
             clean_name = new_name.strip().lower()
             st.session_state.services[clean_name] = {"category": new_cat, "price": new_price}
-            st.success(f"Послугу '{clean_name}' успішно додано до категорії '{new_cat}'!")
+            st.success(f"Успішно додано до категорії '{new_cat}'!")
             st.rerun()
         else:
-            st.error("Введіть назву та коректну ціну.")
+            st.error("Введіть назву та коректну суму.")
 
 # Кнопка додавання до поточного чека
 if st.button("Додати до чека", type="primary"):
     if not master_name.strip():
         st.error("⚠️ Будь ласка, введіть своє ім'я у верхньому полі перед додаванням послуг!")
     elif not selected_service:
-        st.error("Оберіть послугу зі списку.")
+        st.error("Оберіть позицію зі списку.")
     else:
-        total = qty * price
+        # Якщо це знижка, робимо суму мінусовою автоматично!
+        item_price = -price if selected_category == "Знижки" else price
+        total = qty * item_price
+        
         st.session_state.cart.append({
             "name": selected_service, 
             "category": selected_category,
-            "price": price, 
+            "price": item_price, 
             "qty": qty, 
             "total": total
         })
-        st.success(f"Додано: {selected_service} ({qty} од.)")
+        st.success(f"Додано до чека: {selected_service}")
 
 # Відображення поточного чека
 st.markdown("---")
@@ -88,7 +92,7 @@ if st.session_state.cart:
         st.write(f"**{i+1}. [{item['category']}] {item['name']}** — {item['qty']} од. x {item['price']} грн = **{item['total']} грн**")
         grand_total += item['total']
     
-    st.markdown(f"### Загальна сума: {grand_total} грн")
+    st.markdown(f"### Загальна сума до сплати: {grand_total} грн")
     
     col1, col2 = st.columns(2)
     with col1:
@@ -98,7 +102,7 @@ if st.session_state.cart:
             else:
                 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 
-                history_record = f"Час: {now} | Майстер: {master_name} | Сума: {grand_total} грн\n"
+                history_record = f"Час: {now} | Майстер: {master_name} | Загалом: {grand_total} грн\n"
                 for item in st.session_state.cart:
                     history_record += f"   - [{item['category']}] {item['name']} ({item['qty']} x {item['price']} грн = {item['total']} грн)\n"
                 history_record += "-" * 40 + "\n"
