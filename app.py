@@ -2,15 +2,17 @@ import streamlit as st
 from datetime import datetime
 import os
 
-# База послуг та цін за замовчуванням
+# База послуг із категоріями та цінами за замовчуванням
 if 'services' not in st.session_state:
     st.session_state.services = {
-        "Установка люстри": 519,
-        "Матеріал люстра": 1500,
-        "Установка розетки": 400,
-        "Матеріал розетка": 150,
-        "Виїзд майстра": 450,
-
+        "Установка люстри": {"category": "Послуги", "price": 520},
+        "Установка розетки": {"category": "Послуги", "price": 200},
+        "Установка вхідного дзвінка": {"category": "Послуги", "price": 400},
+        "Розетка подвійна": {"category": "Матеріали", "price": 250},
+        "Люстра": {"category": "Матеріали", "price": 50},
+        "Розетка одинарна": {"category": "Матеріали", "price": 150},
+        "Виїзд майстра": {"category": "Інше", "price": 100},
+        "Знижка ВПО": {"category": "інше", "price": -10%}
     }
 
 if 'cart' not in st.session_state:
@@ -24,21 +26,37 @@ master_name = st.text_input("👤 Хто оформлює замовлення (
 
 st.markdown("---")
 
-# Вибір або введення послуги
-service_options = list(st.session_state.services.keys())
-selected_service = st.selectbox("Оберіть послугу зі списку", service_options)
+# 1. Вибираємо категорію
+categories = ["Послуги", "Матеріали", "Інше"]
+selected_category = st.selectbox("Оберіть категорію:", categories)
 
-# Можливість змінити кількість
+# Фільтруємо послуги за обраною категорією
+filtered_services = {name: data for name, data in st.session_state.services.items() if data["category"] == selected_category}
+service_options = list(filtered_services.keys())
+
+if service_options:
+    selected_service = st.selectbox("Оберіть послугу зі списку", service_options)
+    current_price = float(filtered_services[selected_service]["price"])
+else:
+    selected_service = None
+    current_price = 0.0
+    st.info("У цій категорії поки немає послуг.")
+
+# Можливість змінити кількість та ціну
 qty = st.number_input("Кількість / Години", min_value=0.1, value=1.0, step=0.5)
+price = st.number_input("Ціна за одиницю (грн)", min_value=0.0, value=current_price, step=10.0)
 
-# Блок додавання нової послуги, якщо її немає в базовому списку
-with st.expander("➕ Додати нову послугу в базу (якщо немає в списку)"):
+# Блок додавання нової послуги в певну категорію
+with st.expander("➕ Додати нову послугу в базу"):
     new_name = st.text_input("Назва нової послуги")
-    new_price = st.number_input("Ціна за одиницю (грн)", min_value=0.0, value=0.0)
+    new_cat = st.selectbox("Категорія для нової послуги:", categories, key="new_cat_select")
+    new_price = st.number_input("Ціна за одиницю (грн)", min_value=0.0, value=0.0, key="new_price_input")
+    
     if st.button("Зберегти нову послугу"):
-        if new_name and new_price > 0:
-            st.session_state.services[new_name.strip()] = new_price
-            st.success(f"Послугу '{new_name}' успішно додано!")
+        if new_name.strip() and new_price > 0:
+            clean_name = new_name.strip().lower()
+            st.session_state.services[clean_name] = {"category": new_cat, "price": new_price}
+            st.success(f"Послугу '{clean_name}' успішно додано до категорії '{new_cat}'!")
             st.rerun()
         else:
             st.error("Введіть назву та коректну ціну.")
@@ -47,11 +65,13 @@ with st.expander("➕ Додати нову послугу в базу (якщо
 if st.button("Додати до чека", type="primary"):
     if not master_name.strip():
         st.error("⚠️ Будь ласка, введіть своє ім'я у верхньому полі перед додаванням послуг!")
+    elif not selected_service:
+        st.error("Оберіть послугу зі списку.")
     else:
-        price = st.session_state.services[selected_service]
         total = qty * price
         st.session_state.cart.append({
             "name": selected_service, 
+            "category": selected_category,
             "price": price, 
             "qty": qty, 
             "total": total
@@ -65,7 +85,7 @@ st.subheader("🧾 Поточний чек клієнта")
 if st.session_state.cart:
     grand_total = 0
     for i, item in enumerate(st.session_state.cart):
-        st.write(f"**{i+1}. {item['name']}** — {item['qty']} од. x {item['price']} грн = **{item['total']} грн**")
+        st.write(f"**{i+1}. [{item['category']}] {item['name']}** — {item['qty']} од. x {item['price']} грн = **{item['total']} грн**")
         grand_total += item['total']
     
     st.markdown(f"### Загальна сума: {grand_total} грн")
@@ -78,13 +98,11 @@ if st.session_state.cart:
             else:
                 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 
-                # Формуємо запис із ім'ям майстра та чеком
                 history_record = f"Час: {now} | Майстер: {master_name} | Сума: {grand_total} грн\n"
                 for item in st.session_state.cart:
-                    history_record += f"   - {item['name']} ({item['qty']} x {item['price']} грн = {item['total']} грн)\n"
+                    history_record += f"   - [{item['category']}] {item['name']} ({item['qty']} x {item['price']} грн = {item['total']} грн)\n"
                 history_record += "-" * 40 + "\n"
                 
-                # Зберігаємо у файл на сервері
                 filename = "all_sales_history.txt"
                 with open(filename, "a", encoding="utf-8") as f:
                     f.write(history_record)
@@ -105,7 +123,6 @@ st.markdown("---")
 with st.expander("🔒 Панель хоста (Історія всіх чеків)"):
     admin_password = st.text_input("Введіть пароль адміністратора:", type="password")
     
-    # Можеш змінити "1234" на будь-який інший власний пароль
     if admin_password == "1234":
         st.success("Доступ дозволено!")
         history_file = "all_sales_history.txt"
