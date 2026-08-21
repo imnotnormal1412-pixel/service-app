@@ -12,7 +12,7 @@ if 'services' not in st.session_state:
         "Люстра": {"category": "Матеріали", "price": 50},
         "Розетка одинарна": {"category": "Матеріали", "price": 150},
         "Виїзд майстра": {"category": "Інше", "price": 100},
-        "Знижка ВПО": {"category": "інше", "price": -10%}
+
     }
 
 if 'cart' not in st.session_state:
