@@ -17,12 +17,12 @@ if 'cart' not in st.session_state:
 
 st.title("✂️ Система розрахунку послуг")
 
-# Поле для ідентифікації майстра/акаунта
+# Поле для ідентифікації майстра
 master_name = st.text_input("👤 Хто оформлює замовлення (Ваше ім'я):", placeholder="Наприклад: Олена або Адмін")
 
 st.markdown("---")
 
-# Вибір: з наявних чи своя нова
+# Вибір послуги
 choice_type = st.radio("Дія:", ["Обрати з наявних послуг", "Ввести нову послугу вручну"], horizontal=True)
 
 service_name = ""
@@ -83,14 +83,11 @@ if st.session_state.cart:
                 st.error("⚠️ Введіть ім'я майстра на початку сторінки!")
             else:
                 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                
-                # Формуємо текст запису для файлу
                 history_record = f"Час: {now} | Майстер: {master_name} | Сума: {grand_total} грн\n"
                 for item in st.session_state.cart:
                     history_record += f"   - {item['name']} ({item['qty']} x {item['price']} грн = {item['total']} грн)\n"
                 history_record += "-" * 40 + "\n"
                 
-                # Записуємо у файл на сервері
                 filename = "all_sales_history.txt"
                 with open(filename, "a", encoding="utf-8") as f:
                     f.write(history_record)
@@ -106,24 +103,27 @@ if st.session_state.cart:
 else:
     st.info("Чек поки що порожній.")
 
-# Блок адміністратора / хоста для перегляду та завантаження всіх чеків
+# --- ПАНЕЛЬ ХОСТА З ПАРОЛЕМ ---
 st.markdown("---")
-st.subheader("🔒 Панель хоста (Історія всіх чеків)")
-
-history_file = "all_sales_history.txt"
-if os.path.exists(history_file):
-    with open(history_file, "r", encoding="utf-8") as f:
-        history_data = f.read()
+with st.expander("🔒 Вхід для адміністратора (Перегляд історії всіх чеків)"):
+    # Можеш змінити пароль "1234" на будь-який свій улюблений пін-код
+    admin_password = st.text_input("Введіть пароль хоста:", type="password")
     
-    # Кнопка для скачування файлу з історією на комп'ютер (можна відкрити в блокноті чи Excel)
-    st.download_button(
-        label="📥 Завантажити повну історію чеків файлом",
-        data=history_data,
-        file_name="istoriya_chekiv.txt",
-        mime="text/plain"
-    )
-    
-    with st.expager("👀 Переглянути історію на екрані") if hasattr(st, "expager") else st.expander("👀 Переглянути історію на екрані"):
-        st.text(history_data)
-else:
-    st.info("Архів чеків поки що порожній. Збережіть перший чек, і він з'явиться тут.")
+    if admin_password == "1234":
+        st.success("Пароль правильний!")
+        history_file = "all_sales_history.txt"
+        if os.path.exists(history_file):
+            with open(history_file, "r", encoding="utf-8") as f:
+                history_data = f.read()
+            
+            st.download_button(
+                label="📥 Завантажити повну історію чеків файлом",
+                data=history_data,
+                file_name="istoriya_chekiv.txt",
+                mime="text/plain"
+            )
+            st.text(history_data)
+        else:
+            st.info("Архів чеків поки що порожній.")
+    elif admin_password != "":
+        st.error("❌ Неправильний пароль!")
