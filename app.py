@@ -23,7 +23,7 @@ st.markdown("Робоче місце для оформлення замовле�
 
 # Вибір або введення послуги
 service_options = list(st.session_state.services.keys())
-selected_service = st.selectbox("Оберіть послугу зі списку", service_options)
+selected_service = st.text_input("Введіть або виберіть послугу", placeholder="Наприклад: стрижка")
 
 # Можливість ввести щось своє або змінити кількість
 qty = st.number_input("Кількість / Години", min_value=0.1, value=1.0, step=0.5)
