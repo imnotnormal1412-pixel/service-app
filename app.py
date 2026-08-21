@@ -9,7 +9,6 @@ if 'services' not in st.session_state:
         "Установка розетки": 200,
         "Матеріал розетка": 100,
         "Матеріал люстра": 1000,
-        "Виїзд майстра": 400
     }
 
 if 'cart' not in st.session_state:
@@ -21,51 +20,42 @@ if 'history' not in st.session_state:
 st.title("✂️ Система розрахунку послуг")
 st.markdown("Робоче місце для оформлення замовлень")
 
-# Вибір режиму: обрати з бази чи ввести своє
-input_mode = st.radio("Як ви хочете додати послугу?", ["📌 Обрати зі списку", "✏️ Ввести свою назву вручну"], horizontal=True)
+# Повертаємо єдиний зручний пошук-selectbox, який фільтрує варіанти по ходу введення
+service_options = list(st.session_state.services.keys())
+selected_service = st.selectbox("Пошук послуги (почніть вводити назву):", service_options)
 
-service_name = ""
-default_price = 0.0
+# Автоматично підтягуємо ціну вибраної послуги
+default_price = float(st.session_state.services.get(selected_service, 0.0))
 
-if input_mode == "📌 Обрати зі списку":
-    # Список для вибору
-    options = ["-- Оберіть послугу --"] + list(st.session_state.services.keys())
-    selected = st.selectbox("Список послуг", options)
-    
-    if selected != "-- Оберіть послугу --":
-        service_name = selected
-        default_price = float(st.session_state.services[selected])
-else:
-    # Ручне введення для кастомних послуг
-    service_name = st.text_input("Введіть назву нової послуги", placeholder="Наприклад: ботокс волосся")
-    # Перевіряємо, чи є вона раптом у базі, щоб підтягнути ціну
-    clean_name = service_name.strip().lower()
-    if clean_name in st.session_state.services:
-        default_price = float(st.session_state.services[clean_name])
-
-# Поля кількості та ціни
 qty = st.number_input("Кількість / Години", min_value=0.1, value=1.0, step=0.5)
 price = st.number_input("Ціна за одиницю (грн)", min_value=0.0, value=default_price, step=10.0)
 
+# Додатковий блок для додавання абсолютно нових послуг, яких ще немає в списку
+with st.expander("➕ Додати абсолютно нову послугу в базу"):
+    new_name = st.text_input("Назва нової послуги")
+    new_price = st.number_input("Ціна нової послуги (грн)", min_value=0.0, value=0.0)
+    if st.button("Зберегти нову послугу в базу"):
+        if new_name.strip() and new_price > 0:
+            clean_new_name = new_name.strip().lower()
+            st.session_state.services[clean_new_name] = new_price
+            st.success(f"Послугу '{clean_new_name}' успішно додано!")
+            st.rerun()
+        else:
+            st.error("Введіть назву та коректну ціну.")
+
 # Кнопка додавання до чека
 if st.button("Додати до чека", type="primary"):
-    final_name = service_name.strip()
-    if final_name and final_name != "-- Оберіть послугу --":
-        # Зберігаємо в загальну базу на майбутнє
-        clean_key = final_name.lower()
-        st.session_state.services[clean_key] = price
-        
+    if selected_service:
         total = qty * price
         st.session_state.cart.append({
-            "name": clean_key, 
+            "name": selected_service, 
             "price": price, 
             "qty": qty, 
             "total": total
         })
-        st.success(f"Додано: {clean_key} ({qty} од.)")
-        st.rerun()
+        st.success(f"Додано: {selected_service} ({qty} од.)")
     else:
-        st.error("Будь ласка, оберіть або введіть назву послуги.")
+        st.error("Оберіть послугу.")
 
 # Відображення поточного чека
 st.markdown("---")
