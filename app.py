@@ -19,54 +19,51 @@ if 'history' not in st.session_state:
 
 st.title("✂️ Система розрахунку послуг")
 
-# Робимо перемикач: Вибрати з готового чи Додати свою
-tab1, tab2 = st.tabs(["✨ Обрати з прайсу", "➕ Додати нову послугу"])
+# Звичайне текстове поле — мобільна клавіатура відкривається і дає друкувати що завгодно!
+search_text = st.text_input("✍️ Почніть вводити назву послуги:", placeholder="Наприклад: манікюр...")
 
-with tab1:
-    st.subheader("Швидкий вибір послуги")
-    service_list = list(st.session_state.services.keys())
-    
-    # Використовуємо звичайний список для мобільних (натискаєш і обираєш зі списку одним пальцем)
-    chosen_service = st.selectbox("Оберіть послугу зі списку:", service_list, key="mobile_select")
-    
-    current_price = float(st.session_state.services[chosen_service])
-    qty = st.number_input("Кількість / Години", min_value=0.1, value=1.0, step=0.5, key="qty_1")
-    price = st.number_input("Ціна за од. (грн)", min_value=0.0, value=current_price, step=10.0, key="price_1")
+# Шукаємо збіги в базі в реальному часі
+matched_items = {}
+if search_text.strip():
+    query = search_text.strip().lower()
+    matched_items = {k: v for k, v in st.session_state.services.items() if query in k}
 
-    if st.button("Додати до чека", type="primary", key="btn_1"):
+# Якщо користувач щось вводить і є підказки — показуємо їх
+selected_name = search_text.strip().lower()
+default_price = 0.0
+
+if matched_items:
+    st.info("💡 Знайдено в базі (натисніть або введіть далі):")
+    # Виводимо найближчі варіанти
+    for name, price_val in matched_items.items():
+        if st.button(f"📌 {name} — {price_val} грн"):
+            selected_name = name
+            default_price = float(price_val)
+            st.rerun()
+elif search_text.strip():
+    st.warning("⚠️ Такої послуги немає в базі. Вона буде створена як нова.")
+
+# Поля кількості та ціни
+qty = st.number_input("Кількість / Години", min_value=0.1, value=1.0, step=0.5)
+price = st.number_input("Ціна за одиницю (грн)", min_value=0.0, value=default_price, step=10.0)
+
+# Кнопка додавання до чека
+if st.button("Додати до чека", type="primary"):
+    if selected_name:
+        # Зберігаємо в загальну базу
+        st.session_state.services[selected_name] = price
+        
         total = qty * price
         st.session_state.cart.append({
-            "name": chosen_service, 
+            "name": selected_name, 
             "price": price, 
             "qty": qty, 
             "total": total
         })
-        st.success(f"Додано: {chosen_service} ({qty} од.)")
+        st.success(f"Додано: {selected_name} ({qty} од.)")
         st.rerun()
-
-with tab2:
-    st.subheader("Створення кастомної послуги")
-    custom_name = st.text_input("Введіть назву послуги вручну", placeholder="Наприклад: ламінування")
-    custom_qty = st.number_input("Кількість / Години", min_value=0.1, value=1.0, step=0.5, key="qty_2")
-    custom_price = st.number_input("Ціна за од. (грн)", min_value=0.0, value=0.0, step=10.0, key="price_2")
-
-    if st.button("Зберегти і додати до чека", type="primary", key="btn_2"):
-        if custom_name.strip() and custom_price > 0:
-            clean_name = custom_name.strip().lower()
-            # Додаємо в загальну базу на майбутнє
-            st.session_state.services[clean_name] = custom_price
-            
-            total = custom_qty * custom_price
-            st.session_state.cart.append({
-                "name": clean_name, 
-                "price": custom_price, 
-                "qty": custom_qty, 
-                "total": total
-            })
-            st.success(f"Додано нову послугу: {clean_name}")
-            st.rerun()
-        else:
-            st.error("Будь ласка, введіть назву та ціну.")
+    else:
+        st.error("Введіть назву послуги.")
 
 # Відображення поточного чека
 st.markdown("---")
