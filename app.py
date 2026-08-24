@@ -130,26 +130,25 @@ if st.session_state.cart:
             now = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
             master = st.session_state.logged_in_master
             
-            items_desc_list = []
+            new_rows = []
             for item in st.session_state.cart:
-                items_desc_list.append(f"{item['name']} ({item['qty']} од. x {item['price']} грн)")
-            
-            combined_items_str = " | ".join(items_desc_list)
-            
-            new_row = {
-                "Час": now,
-                "Майстер": master,
-                "Склад чека (Послуги/Матеріали)": combined_items_str,
-                "Загальна сума чека (грн)": grand_total
-            }
+                new_rows.append({
+                    "Час": now,
+                    "Майстер": master,
+                    "Категорія": item['category'],
+                    "Послуга/Позиція": item['name'],
+                    "Кількість": item['qty'],
+                    "Ціна за од. (грн)": item['price'],
+                    "Сума (грн)": item['total']
+                })
             
             excel_file = "all_sales_history.xlsx"
-            df_new = pd.DataFrame([new_row])
+            df_new = pd.DataFrame(new_rows)
             
             if os.path.exists(excel_file):
                 try:
                     df_old = pd.read_excel(excel_file)
-                    if "Склад чека (Послуги/Матеріали)" not in df_old.columns:
+                    if "Послуга/Позиція" not in df_old.columns:
                         df_combined = df_new
                     else:
                         df_combined = pd.concat([df_old, df_new], ignore_index=True)
@@ -160,7 +159,7 @@ if st.session_state.cart:
                 
             df_combined.to_excel(excel_file, index=False)
                 
-            st.success("🎉 Чек успішно збережено в Excel-базу!")
+            st.success("🎉 Чек успішно збережено в Excel!")
             st.session_state.cart.clear()
             st.rerun()
             
@@ -192,21 +191,13 @@ with st.expander("🔒 Панель хоста (Історія всіх чекі
             )
             
             st.markdown("---")
-            st.subheader("📋 Останні чеки:")
+            st.subheader("📋 Всі записи в базі:")
             
             try:
                 df = pd.read_excel(history_file)
-                if not df.empty and 'Склад чека (Послуги/Матеріали)' in df.columns:
-                    for index, row in df.iloc[::-1].iterrows():
-                        with st.container(border=True):
-                            st.markdown(f"🕒 **Час:** {row['Час']} &nbsp;&nbsp;|&nbsp;&nbsp; 👤 **Майстер:** {row['Майстер']}")
-                            st.markdown("---")
-                            st.write(f"**Склад замовлення:** {row['Склад чека (Послуги/Матеріали)']}")
-                            st.markdown(f"**Загальна сума чека: {row['Загальна сума чека (грн)']} грн**")
-                else:
-                    st.info("Формат файлу історії оновлюється. Зробіть новий чек.")
+                st.dataframe(df)
             except Exception:
-                st.info("Архів чеків оновлено. Зробіть новий чек.")
+                st.info("Архів чеків оновлюється.")
         else:
             st.info("Архів чеків поки що порожній.")
             
