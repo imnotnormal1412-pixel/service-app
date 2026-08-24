@@ -251,13 +251,11 @@ if st.session_state.cart:
     client_visits_count = 0
     
     if not is_anon:
-        # Змінено поле: тепер майстер може спокійно вводити номер з нулем на початку (наприклад, 068...) або без нього
         entered_phone = st.text_input("📞 Номер телефону клієнта:", placeholder="0681234567 або 681234567")
         
         if entered_phone.strip():
             clean_input_digits = "".join(filter(str.isdigit, entered_phone.strip()))
             
-            # Автоматично приводимо до міжнародного стандарту 380 (якщо ввели з 0 або без)
             if clean_input_digits.startswith("380"):
                 target_search_phone = clean_input_digits
             elif clean_input_digits.startswith("0"):
@@ -282,13 +280,11 @@ if st.session_state.cart:
                 st.success(f"🌟 Знайдено в базі! Клієнт: **{found_client_name}** | Статус: **{client_status}** (Візитів: {client_visits_count})")
                 client_name = found_client_name
                 
-                # ---- ПЕРЕВІРКА: чи знижка вже додана в чек ----
                 already_has_discount = any("знижка" in str(item["name"]).lower() for item in st.session_state.cart)
                 
                 if not already_has_discount:
                     status_lower = client_status.lower()
                     
-                    # Логіка видачі знижки відповідно до точного статусу з бази
                     if "пенсіонер" in status_lower:
                         if st.button("👵 Застосувати пенсійну знижку (-100 грн)"):
                             disc_data = st.session_state.services.get("знижка пенсійна", {"price": 100, "is_percent": False})
@@ -567,4 +563,24 @@ with st.expander("🔒 Панель хоста (Історія та аналіт
                     df_sheet = pd.read_excel(history_file, sheet_name=selected_sheet)
                     
                     if "Час" in df_sheet.columns and not df_sheet.empty:
-                    ...
+                        df_sheet["Дата"] = pd.to_datetime(df_sheet["Час"], errors='coerce').dt.strftime("%Y-%m-%d")
+                        available_dates = df_sheet["Дата"].dropna().unique().tolist()
+                        available_dates.sort(reverse=True)
+                        
+                        selected_date = st.selectbox("📅 Фільтр за датою:", ["Усі дати"] + available_dates)
+                        if selected_date != "Усі дати":
+                            df_sheet = df_sheet[df_sheet["Дата"] == selected_date]
+                        df_sheet = df_sheet.drop(columns=["Дата"])
+                    
+                    if "Сума (грн)" in df_sheet.columns:
+                        total_rev = df_sheet["Сума (грн)"].sum()
+                        st.metric(label=f"💰 Загальна сума (Майстер: {selected_sheet})", value=f"{total_rev} грн")
+                    
+                    st.dataframe(df_sheet, use_container_width=True)
+            except Exception as e:
+                st.info(f"Помилка читання файлу: {e}")
+        else:
+            st.info("Архів чеків поки що порожній.")
+            
+    elif admin_password != "":
+        st.error("❌ Неправильний пароль!")
