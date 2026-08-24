@@ -259,6 +259,32 @@ if st.session_state.cart:
             if is_existing_client:
                 st.success(f"🌟 Знайдено в базі! Постійний клієнт: **{found_client_name}** (Візитів у базі: {client_visits_count})")
                 client_name = found_client_name
+                
+                # ---- ШВИДКА КНОПКА ЗНИЖКИ ДЛЯ ПОСТІЙНОГО КЛІЄНТА ----
+                if client_visits_count >= 2: # Вважаємо постійним, якщо вже був 2+ рази
+                    if st.button("🎁 Застосувати знижку постійному клієнту (-50 грн)"):
+                        # Шукаємо дефолтну знижку з бази послуг або додаємо фіксовану 50 грн
+                        disc_data = st.session_state.services.get("знижка постійному клієнту", {"price": 50, "is_percent": False})
+                        disc_val = float(disc_data["price"])
+                        is_pct = disc_data.get("is_percent", False)
+                        
+                        if is_pct:
+                            item_price = -disc_val
+                            item_name_display = f"знижка постійному клієнту ({disc_val}%)"
+                        else:
+                            item_price = -disc_val
+                            item_name_display = "знижка постійному клієнту"
+                            
+                        st.session_state.cart.append({
+                            "name": item_name_display, 
+                            "category": "Знижки",
+                            "price": item_price, 
+                            "qty": 1.0, 
+                            "total": item_price,
+                            "is_pct": is_pct
+                        })
+                        st.success("✨ Знижка постійного клієнта успішно додана до чека!")
+                        st.rerun()
             else:
                 st.info("💡 Номер новий для системи. Будь ласка, вкажіть ім'я клієнта нижче:")
                 client_name = st.text_input("👤 Ім'я нового клієнта:", placeholder="Наприклад: Олена")
