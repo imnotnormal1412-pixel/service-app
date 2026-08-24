@@ -130,30 +130,32 @@ if st.session_state.cart:
             now = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
             master = st.session_state.logged_in_master
             
-            new_rows = []
+            # Збираємо всі послуги цього чека в один охайний рядок для Excel
+            items_desc_list = []
             for item in st.session_state.cart:
-                new_rows.append({
-                    "Час": now,
-                    "Майстер": master,
-                    "Категорія": item['category'],
-                    "Послуга/Позиція": item['name'],
-                    "Кількість": item['qty'],
-                    "Ціна за од. (грн)": item['price'],
-                    "Сума (грн)": item['total']
-                })
+                items_desc_list.append(f"{item['name']} ({item['qty']} од. x {item['price']} грн)")
+            
+            combined_items_str = " | ".join(items_desc_list)
+            
+            new_row = {
+                "Час": now,
+                "Майстер": master,
+                "Склад чека (Послуги/Матеріали)": combined_items_str,
+                "Загальна сума чека (грн)": grand_total
+            }
             
             excel_file = "all_sales_history.xlsx"
             
             if os.path.exists(excel_file):
                 df_old = pd.read_excel(excel_file)
-                df_new = pd.DataFrame(new_rows)
+                df_new = pd.DataFrame([new_row])
                 df_combined = pd.concat([df_old, df_new], ignore_index=True)
                 df_combined.to_excel(excel_file, index=False)
             else:
-                df_new = pd.DataFrame(new_rows)
+                df_new = pd.DataFrame([new_row])
                 df_new.to_excel(excel_file, index=False)
                 
-            st.success("🎉 Чек успішно збережено в Excel-базу!")
+            st.success("🎉 Чек успішно збережено в Excel-базу як єдиний рядок!")
             st.session_state.cart.clear()
             st.rerun()
             
@@ -185,24 +187,18 @@ with st.expander("🔒 Панель хоста (Історія всіх чекі
             )
             
             st.markdown("---")
-            st.subheader("📋 Останні чеки (груповані):")
+            st.subheader("📋 Останні чеки:")
             
             df = pd.read_excel(history_file)
             
             if not df.empty:
-                grouped = df.groupby(['Час', 'Майстер'])
-                
-                for (time_val, master_val), group in list(grouped)[::-1]:
-                    total_check_sum = group['Сума (грн)'].sum()
-                    
+                # Виводимо чеки у зворотньому порядку (нові зверху)
+                for index, row in df.iloc[::-1].iterrows():
                     with st.container(border=True):
-                        st.markdown(f"🕒 **Час:** {time_val} &nbsp;&nbsp;|&nbsp;&nbsp; 👤 **Майстер:** {master_val}")
+                        st.markdown(f"🕒 **Час:** {row['Час']} &nbsp;&nbsp;|&nbsp;&nbsp; 👤 **Майстер:** {row['Майстер']}")
                         st.markdown("---")
-                        
-                        for index, row in group.iterrows():
-                            st.write(f"• [{row['Категорія']}] **{row['Послуга/Позиція']}** — {row['Кількість']} од. × {row['Ціна за од. (грн)']} грн = **{row['Сума (грн)']} грн**")
-                        
-                        st.markdown(f"**Загальна сума чека: {total_check_sum} грн**")
+                        st.write(f"**Склад замовлення:** {row['Склад чека (Послуги/Матеріали)]}")
+                        st.markdown(f"**Загальна сума чека: {row['Загальна сума чека (грн)']} грн**")
         else:
             st.info("Архів чеків поки що порожній.")
             
