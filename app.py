@@ -31,14 +31,15 @@ if 'services' not in st.session_state:
 if 'cart' not in st.session_state:
     st.session_state.cart = []
 
-# Допоміжна функція для безпечного завантаження/створення бази клієнтів із колоночкою «Статус»
+# Допоміжна функція для безпечного завантаження бази клієнтів
 def load_clients_base():
     clients_file = "clients_base.xlsx"
     expected_columns = ["Телефон", "Ім'я", "Кількість візитів", "Статус", "Останній візит", "Останній майстер"]
     
     if os.path.exists(clients_file):
         try:
-            df = pd.read_excel(clients_file)
+            # Зчитуємо колонку Телефони суворо як текстові рядки (dtype=str), щоб Excel не псував номери
+            df = pd.read_excel(clients_file, dtype={"Телефон": str})
             for col in expected_columns:
                 if col not in df.columns:
                     if col == "Статус":
@@ -258,15 +259,17 @@ if st.session_state.cart:
             entered_digits = st.text_input("📞 Номер телефону (без 380):", placeholder="681234567")
         
         if entered_digits.strip():
-            clean_digits = "".join(filter(str.isdigit, entered_digits.strip()))
-            client_phone = f"380{clean_digits}"
+            # Залишаємо від введеного майстром лише цифри і формуємо повний номер для пошуку
+            clean_input_digits = "".join(filter(str.isdigit, entered_digits.strip()))
+            target_search_phone = f"380{clean_input_digits}"
             
             df_check = load_clients_base()
             
             if not df_check.empty and "Телефон" in df_check.columns:
+                # Очищаємо кожен номер у базі від будь-яких зайвих символів, апострофів чи пробілів, залишаючи самі цифри
                 df_check["ЧистийТелефон"] = df_check["Телефон"].astype(str).apply(lambda x: "".join(filter(str.isdigit, x)))
                 
-                match = df_check[df_check["ЧистийТелефон"] == client_phone]
+                match = df_check[df_check["ЧистийТелефон"] == target_search_phone]
                 if not match.empty:
                     is_existing_client = True
                     found_client_name = str(match.iloc[0]["Ім'я"])
@@ -339,7 +342,9 @@ if st.session_state.cart:
                     cleaned_phone = "Анонім"
                     cleaned_name = "Анонім"
                 else:
-                    cleaned_phone = f"'{client_phone}"
+                    clean_input_digits = "".join(filter(str.isdigit, entered_digits.strip()))
+                    full_phone_num = f"380{clean_input_digits}"
+                    cleaned_phone = f"'{full_phone_num}"
                     cleaned_name = client_name.strip() if client_name.strip() else found_client_name
                 
                 # --- ОНОВЛЕННЯ / ЗБЕРЕЖЕННЯ БАЗИ КЛІЄНТІВ ---
@@ -349,8 +354,8 @@ if st.session_state.cart:
                     if not df_clients.empty and "Телефон" in df_clients.columns:
                         df_clients["ЧистийТелефон"] = df_clients["Телефон"].astype(str).apply(lambda x: "".join(filter(str.isdigit, x)))
                         
-                        if client_phone in df_clients["ЧистийТелефон"].values:
-                            idx = df_clients[df_clients["ЧистийТелефон"] == client_phone].index[0]
+                        if full_phone_num in df_clients["ЧистийТелефон"].values:
+                            idx = df_clients[df_clients["ЧистийТелефон"] == full_phone_num].index[0]
                             current_visits = int(df_clients.loc[idx, "Кількість візитів"])
                             df_clients.loc[idx, "Кількість візитів"] = current_visits + 1
                             df_clients.loc[idx, "Останній візит"] = today_date_only
@@ -488,7 +493,6 @@ with st.expander("🔒 Панель хоста (Історія та аналіт
         else:
             st.info("Клієнтська база поки що пуста.")
             
-        # НОВИЙ БЛОК: ЗАВАНТАЖЕННЯ ОНОВЛЕНОГО EXCEL-ФАЙЛУ БАЗИ НА СЕРВЕР
         st.markdown("---")
         st.subheader("📤 Завантажити оновлену базу клієнтів (Excel)")
         st.markdown("Тут ти можеш завантажити свій відредагований Excel-файл (зі статусами «Пенсіонер» тощо), щоб оновити базу на сервері:")
@@ -502,7 +506,7 @@ with st.expander("🔒 Панель хоста (Історія та аналіт
                     st.success("🎉 Базу клієнтів успішно оновлено на сервері! Сторінка зараз перезапуститься.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Помолка при читанні файлу: {e}")
+                    st.error(f"❌ Помилка при читанні файлу: {e}")
 
         st.markdown("---")
         if st.button("🗑️ Очистити всю історію чеків (файл продажів)"):
