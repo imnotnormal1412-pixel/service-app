@@ -169,7 +169,7 @@ st.markdown("---")
 with st.expander("🔒 Панель хоста (Історія всіх чеків)"):
     admin_password = st.text_input("Введіть пароль адміністратора:", type="password")
     
-if admin_password == "1111":
+    if admin_password == "1234":
         st.success("Доступ дозволено!")
         history_file = "all_sales_history.xlsx"
         
@@ -177,7 +177,6 @@ if admin_password == "1111":
             with open(history_file, "rb") as f:
                 excel_bytes = f.read()
             
-            # Кнопка скачування залишається незмінною (там кожна послуга розписана)
             st.download_button(
                 label="📥 Завантажити всю історію в Excel (.xlsx)",
                 data=excel_bytes,
@@ -188,25 +187,18 @@ if admin_password == "1111":
             st.markdown("---")
             st.subheader("📋 Останні чеки (груповані):")
             
-            # Читаємо Excel через pandas
             df = pd.read_excel(history_file)
             
             if not df.empty:
-                # Групуємо рядки за часом та майстром, щоб зібрати чек разом
-                # Оскільки кожен чек має унікальний час створення, це ідеальний ключ об'єднання
                 grouped = df.groupby(['Час', 'Майстер'])
                 
-                # Проходимося по кожному унікальному чеку (у зворотньому порядку, щоб нові були зверху)
                 for (time_val, master_val), group in list(grouped)[::-1]:
-                    # Рахуємо загальну суму цього конкретного чека
                     total_check_sum = group['Сума (грн)'].sum()
                     
-                    # Виводимо красиву картку чека для хоста
                     with st.container(border=True):
                         st.markdown(f"🕒 **Час:** {time_val} &nbsp;&nbsp;|&nbsp;&nbsp; 👤 **Майстер:** {master_val}")
                         st.markdown("---")
                         
-                        # Виводимо кожну послугу всередині цього чека
                         for index, row in group.iterrows():
                             st.write(f"• [{row['Категорія']}] **{row['Послуга/Позиція']}** — {row['Кількість']} од. × {row['Ціна за од. (грн)']} грн = **{row['Сума (грн)']} грн**")
                         
