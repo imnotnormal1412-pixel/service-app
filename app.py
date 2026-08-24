@@ -6,7 +6,7 @@ import pandas as pd
 # Список дозволених майстрів (White List)
 ALLOWED_MASTERS = ["Микола", "Олена", "Тато", "Адмін"]
 
-# База послуг із категоріями та цінами (для знижок у відсотках вказуємо значення зі знаком "%" або суму в грн)
+# База послуг із категоріями та цінами за замовчуванням
 if 'services' not in st.session_state:
     st.session_state.services = {
         "Установка люстри": {"category": "Послуги", "price": 520},
@@ -86,7 +86,6 @@ else:
 # Можливість змінити кількість та ціну
 qty = st.number_input("Кількість / Години", min_value=0.1, value=1.0, step=0.5)
 
-# Якщо це знижка, програма сама підказує, що це — відсотки чи гривні з бази
 if selected_category == "Знижки":
     if is_percentage_service:
         st.info(f"💡 Ця знижка за замовчуванням у **відсотках (%)** згідно з базою.")
@@ -213,6 +212,7 @@ if st.session_state.cart:
                     pass
             
             new_rows = []
+            # Додаємо звичайні рядки послуг
             for item in calculated_cart:
                 new_rows.append({
                     "№ чека": next_receipt_num,
@@ -224,6 +224,18 @@ if st.session_state.cart:
                     "Ціна за од. / Значення": item['price_display'],
                     "Сума (грн)": item['total']
                 })
+            
+            # Додаємо фінальний рядок-підсумок для цього чека в Excel!
+            new_rows.append({
+                "№ чека": next_receipt_num,
+                "Час": now,
+                "Майстер": master,
+                "Категорія": "--- ЗАГАЛОМ ЗА ЧЕК ---",
+                "Послуга/Позиція": f"Підсумок чека №{next_receipt_num}",
+                "Кількість": "",
+                "Ціна за од. / Значення": "",
+                "Сума (грн)": grand_total
+            })
             
             df_new = pd.DataFrame(new_rows)
             
@@ -245,7 +257,7 @@ if st.session_state.cart:
                 with pd.ExcelWriter(history_file, engine='openpyxl') as writer:
                     df_new.to_excel(writer, sheet_name=master, index=False)
                 
-            st.success(f"🎉 Чек №{next_receipt_num} успішно збережено в Excel на сторінку майстра '{master}'!")
+            st.success(f"🎉 Чек №{next_receipt_num} успішно збережено в Excel (із підсумком на суму {grand_total} грн)!")
             st.session_state.cart.clear()
             st.rerun()
             
@@ -297,7 +309,7 @@ with st.expander("🔒 Панель хоста (Історія та аналіт
                     df_sheet = pd.read_excel(history_file, sheet_name=selected_sheet)
                     
                     if "Час" in df_sheet.columns and not df_sheet.empty:
-                        df_sheet["Дата"] = pd.to_datetime(df_sheet["Час"]).dt.strftime("%Y-%m-%d")
+                        df_sheet["Дата"] = pd.to_datetime(df_sheet["Час"], errors='coerce').dt.strftime("%Y-%m-%d")
                         available_dates = df_sheet["Дата"].dropna().unique().tolist()
                         available_dates.sort(reverse=True)
                         
