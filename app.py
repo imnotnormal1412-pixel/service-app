@@ -142,28 +142,24 @@ if st.session_state.cart:
                     "Сума (грн)": item['total']
                 })
             
-            excel_file = "all_sales_history.xlsx"
+            history_file = "all_sales_history.xlsx"
             df_new = pd.DataFrame(new_rows)
             
-            if os.path.exists(excel_file):
+            if os.path.exists(history_file):
                 try:
-                    df_old = pd.read_excel(excel_file)
-                    # Робимо перевірку: якщо старий файл має старі колонки, перезаписуємо начисто
+                    df_old = pd.read_excel(history_file)
                     if "Послуга/Позиція" not in df_old.columns:
                         df_combined = df_new
                     else:
-                        # Створюємо пустий рядок-роздільник (усі значення None або порожні)
                         empty_row = {col: None for col in df_old.columns}
                         df_empty = pd.DataFrame([empty_row])
-                        
-                        # Об'єднуємо стару історію, пустий рядок і новий чек
                         df_combined = pd.concat([df_old, df_empty, df_new], ignore_index=True)
                 except Exception:
                     df_combined = df_new
             else:
                 df_combined = df_new
                 
-            df_combined.to_excel(excel_file, index=False)
+            df_combined.to_excel(history_file, index=False)
                 
             st.success("🎉 Чек успішно збережено в Excel із відступом!")
             st.session_state.cart.clear()
@@ -184,6 +180,15 @@ with st.expander("🔒 Панель хоста (Історія всіх чекі
     if admin_password == "1234":
         st.success("Доступ дозволено!")
         history_file = "all_sales_history.xlsx"
+        
+        # Кнопка для повного очищення бази на сайті
+        if st.button("🗑️ Очистити всю історію (видалити файл бази)"):
+            if os.path.exists(history_file):
+                os.remove(history_file)
+                st.success("Архів успішно очищено!")
+                st.rerun()
+            else:
+                st.warning("Файл історії вже порожній.")
         
         if os.path.exists(history_file):
             with open(history_file, "rb") as f:
