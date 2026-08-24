@@ -31,10 +31,10 @@ if 'services' not in st.session_state:
 if 'cart' not in st.session_state:
     st.session_state.cart = []
 
-# Допоміжна функція для безпечного завантаження бази клієнтів
+# Допоміжна функція для безпечного завантаження бази клієнтів із новими колонками
 def load_clients_base():
     clients_file = "clients_base.xlsx"
-    expected_columns = ["Телефон", "Ім'я", "Кількість візитів", "Статус", "Останній візит", "Останній майстер"]
+    expected_columns = ["Телефон", "Ім'я", "Кількість візитів", "Статус", "Коментар клієнта", "Внутрішня примітка", "Останній візит", "Останній майстер"]
     
     if os.path.exists(clients_file):
         try:
@@ -262,6 +262,8 @@ if st.session_state.cart:
     client_phone = ""
     client_name = ""
     client_status = "Звичайний"
+    client_note = ""
+    client_host_note = ""
     is_existing_client = False
     found_client_name = ""
     client_visits_count = 1
@@ -295,9 +297,22 @@ if st.session_state.cart:
                         
                     if "Статус" in match.columns:
                         client_status = str(match.iloc[0]["Статус"]).strip()
+                    if "Коментар клієнта" in match.columns and pd.notna(match.iloc[0]["Коментар клієнта"]):
+                        client_note = str(match.iloc[0]["Коментар клієнта"]).strip()
+                    if "Внутрішня примітка" in match.columns and pd.notna(match.iloc[0]["Внутрішня примітка"]):
+                        client_host_note = str(match.iloc[0]["Внутрішня примітка"]).strip()
             
             if is_existing_client:
                 st.success(f"🌟 Знайдено в базі! Клієнт: **{found_client_name}** | Статус: **{client_status}** (Візитів: {client_visits_count})")
+                
+                # --- ВИВЕДЕННЯ ВНУТРІШНЬОЇ ПРИМІТКИ ХОСТА ЯКЩО ВОНА Є ---
+                if client_host_note:
+                    st.warning(f"⚠️ **Внутрішня примітка хоста щодо клієнта:**\n\n {client_host_note}")
+                
+                # Виведення звичайного коментаря про клієнта
+                if client_note:
+                    st.info(f"💬 **Поточна нотатка про клієнта:** {client_note}")
+                
                 client_name = found_client_name
                 
                 already_has_discount = any(item['category'] == "Знижки" for item in st.session_state.cart)
@@ -355,10 +370,11 @@ if st.session_state.cart:
                 else:
                     st.info("✅ Знижка вже застосована до цього чека.")
             else:
-                st.info("💡 Номер новий для системи. Будь ласка, вкажіть ім'я клієнта нижче:")
+                st.info("💡 Номер новий для системи. Вкажіть ім'я нового клієнта нижче:")
                 client_name = st.text_input("👤 Ім'я нового клієнта:", placeholder="Наприклад: Олена")
     
-    receipt_comment = st.text_input("💬 Коментар або примітка до чека (необов'язково):", placeholder="Особливі побажання...")
+    # Поле для нового коментаря або редагування нотатки про клієнта
+    new_client_comment = st.text_input("💬 Коментар / нотатка щодо цього клієнта (збережеться в базу):", value=client_note, placeholder="Особливості волосся, побажання тощо...")
     
     col1, col2 = st.columns(2)
     with col1:
@@ -389,7 +405,7 @@ if st.session_state.cart:
                     cleaned_phone = f"'{full_phone_num}"
                     cleaned_name = client_name.strip() if client_name.strip() else found_client_name
                 
-                # --- ОНОВЛЕННЯ / ЗБЕРЕЖЕННЯ БАЗИ КЛІЄНТІВ ---
+                # --- ОНОВЛЕННЯ / ЗБЕРЕЖЕННЯ БАЗИ КЛІЄНТІВ ТА ЇХНІХ КОМЕНТАРІВ ---
                 if not is_anon:
                     df_clients = load_clients_base()
                     
@@ -406,12 +422,17 @@ if st.session_state.cart:
                                 df_clients.loc[idx, "Ім'я"] = cleaned_name
                             if "Статус" not in df_clients.columns or pd.isna(df_clients.loc[idx, "Статус"]):
                                 df_clients.loc[idx, "Статус"] = "Звичайний"
+                            # Зберігаємо новий або оновлений коментар про клієнта в базу
+                            if new_client_comment.strip():
+                                df_clients.loc[idx, "Коментар клієнта"] = new_client_comment.strip()
                         else:
                             new_client_row = pd.DataFrame([{
                                 "Телефон": cleaned_phone,
                                 "Ім'я": cleaned_name,
                                 "Кількість візитів": 1,
                                 "Статус": "Звичайний",
+                                "Коментар клієнта": new_client_comment.strip(),
+                                "Внутрішня примітка": "",
                                 "Останній візит": today_date_only,
                                 "Останній майстер": master
                             }])
@@ -422,6 +443,8 @@ if st.session_state.cart:
                             "Ім'я": cleaned_name,
                             "Кількість візитів": 1,
                             "Статус": "Звичайний",
+                            "Коментар клієнта": new_client_comment.strip(),
+                            "Внутрішня примітка": "",
                             "Останній візит": today_date_only,
                             "Останній майстер": master
                         }])
@@ -431,7 +454,7 @@ if st.session_state.cart:
                         
                     df_clients.to_excel(clients_file, index=False)
                 
-                # --- ЗБЕРЕЖЕННЯ ЧЕКА В ІСТОРІЮ МАЙСТРА ---
+                # --- ЗБЕРЕЖЕННЯ ЧЕКА В ІСТОРІЮ МАЙСТРА (БЕЗ ШУМУ) ---
                 next_receipt_num = 1
                 if os.path.exists(history_file):
                     try:
@@ -457,8 +480,7 @@ if st.session_state.cart:
                         "Послуга/Позиція": item['name'],
                         "Кількість": item['qty'],
                         "Ціна за од. / Значення": item['price_display'],
-                        "Сума (грн)": item['total'],
-                        "Коментар": receipt_comment.strip()
+                        "Сума (грн)": item['total']
                     })
                 
                 new_rows.append({
@@ -471,8 +493,7 @@ if st.session_state.cart:
                     "Послуга/Позиція": f"Підсумок чека №{next_receipt_num}",
                     "Кількість": "",
                     "Ціна за од. / Значення": "",
-                    "Сума (грн)": grand_total,
-                    "Коментар": receipt_comment.strip()
+                    "Сума (грн)": grand_total
                 })
                 
                 df_new = pd.DataFrame(new_rows)
@@ -516,7 +537,7 @@ with st.expander("🔒 Панель хоста (Історія та аналіт
         history_file = "all_sales_history.xlsx"
         clients_file = "clients_base.xlsx"
         
-        st.subheader("👥 Клієнтська база")
+        st.subheader("👥 Клієнтська база (зі статусами та внутрішніми примітками)")
         
         if os.path.exists(clients_file):
             with open(clients_file, "rb") as f:
@@ -537,7 +558,7 @@ with st.expander("🔒 Панель хоста (Історія та аналіт
             
         st.markdown("---")
         st.subheader("📤 Завантажити оновлену базу клієнтів (Excel)")
-        st.markdown("Тут ти можеш завантажити свій відредагований Excel-файл (зі статусами «ВПО», «Пенсіонер» тощо), щоб оновити базу на сервері:")
+        st.markdown("Тут ти можеш завантажити свій відредагований Excel-файл (де вписані статуси або **Внутрішня примітка** для майстрів), щоб оновити базу на сервері:")
         
         uploaded_client_file = st.file_uploader("Оберіть файл `clients_base.xlsx`:", type=["xlsx"])
         if uploaded_client_file is not None:
