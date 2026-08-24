@@ -145,25 +145,44 @@ if st.session_state.cart:
     
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("💾 Завершити і зберегти чек"):
-            if not master_name.strip():
-                st.error("⚠️ Введіть ім'я майстра на початку сторінки!")
-            else:
-                from datetime import datetime, timedelta
-                now = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
-                
-                history_record = f"Час: {now} | Майстер: {master_name} | Загалом: {grand_total} грн\n"
-                for item in st.session_state.cart:
-                    history_record += f"   - [{item['category']}] {item['name']} ({item['qty']} x {item['price']} грн = {item['total']} грн)\n"
-                history_record += "-" * 40 + "\n"
-                
-                filename = "all_sales_history.txt"
-                with open(filename, "a", encoding="utf-8") as f:
-                    f.write(history_record)
-                
-                st.success("Чек успішно збережено в загальну базу!")
-                st.session_state.cart.clear()
-                st.rerun()
+if st.button("💾 Завершити і зберегти чек"):
+    if not st.session_state.get('logged_in_master'):
+        st.error("⚠️ Введіть ім'я майстра на початку сторінки!")
+    else:
+        from datetime import datetime, timedelta
+        import pandas as pd
+        
+        now = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
+        master = st.session_state.logged_in_master
+        
+        # Формуємо список рядків для майбутньої таблиці Excel
+        new_rows = []
+        for item in st.session_state.cart:
+            new_rows.append({
+                "Час": now,
+                "Майстер": master,
+                "Категорія": item['category'],
+                "Послуга/Позиція": item['name'],
+                "Кількість": item['qty'],
+                "Ціна за од. (грн)": item['price'],
+                "Сума (грн)": item['total']
+            })
+        
+        excel_file = "all_sales_history.xlsx"
+        
+        # Перевіряємо, чи файл вже існує. Якщо так — дописуємо нові рядки, якщо ні — створюємо новий
+        if os.path.exists(excel_file):
+            df_old = pd.read_excel(excel_file)
+            df_new = pd.DataFrame(new_rows)
+            df_combined = pd.concat([df_old, df_new], ignore_index=True)
+            df_combined.to_excel(excel_file, index=False)
+        else:
+            df_new = pd.DataFrame(new_rows)
+            df_new.to_excel(excel_file, index=False)
+            
+        st.success("🎉 Чек успішно збережено в Excel-базу!")
+        st.session_state.cart.clear()
+        st.rerun()
             
     with col2:
         if st.button("🗑️ Очистити чек"):
@@ -177,20 +196,26 @@ st.markdown("---")
 with st.expander("🔒 Панель хоста (Історія всіх чеків)"):
     admin_password = st.text_input("Введіть пароль адміністратора:", type="password")
     
-    if admin_password == "1111":
+if admin_password == "1111":
         st.success("Доступ дозволено!")
-        history_file = "all_sales_history.txt"
+        history_file = "all_sales_history.xlsx"
+        
         if os.path.exists(history_file):
-            with open(history_file, "r", encoding="utf-8") as f:
-                history_data = f.read()
+            # Читаємо файл для кнопки скачування
+            with open(history_file, "rb") as f:
+                excel_bytes = f.read()
             
             st.download_button(
-                label="📥 Завантажити повну історію чеків файлом",
-                data=history_data,
-                file_name="istoriya_chekiv.txt",
-                mime="text/plain"
+                label="📥 Завантажити всю історію в Excel (.xlsx)",
+                data=excel_bytes,
+                file_name="istoriya_chekiv.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-            st.text(history_data)
+            
+            # Також виведемо саму таблицю на екран для зручності хоста
+            import pandas as pd
+            df_display = pd.read_excel(history_file)
+            st.dataframe(df_display)
         else:
             st.info("Архів чеків поки що порожній.")
     elif admin_password != "":
