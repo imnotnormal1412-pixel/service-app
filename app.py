@@ -169,7 +169,7 @@ st.markdown("---")
 with st.expander("🔒 Панель хоста (Історія всіх чеків)"):
     admin_password = st.text_input("Введіть пароль адміністратора:", type="password")
     
-    if admin_password == "1234":
+if admin_password == "1111":
         st.success("Доступ дозволено!")
         history_file = "all_sales_history.xlsx"
         
@@ -177,6 +177,7 @@ with st.expander("🔒 Панель хоста (Історія всіх чекі
             with open(history_file, "rb") as f:
                 excel_bytes = f.read()
             
+            # Кнопка скачування залишається незмінною (там кожна послуга розписана)
             st.download_button(
                 label="📥 Завантажити всю історію в Excel (.xlsx)",
                 data=excel_bytes,
@@ -184,9 +185,34 @@ with st.expander("🔒 Панель хоста (Історія всіх чекі
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
             
-            df_display = pd.read_excel(history_file)
-            st.dataframe(df_display)
+            st.markdown("---")
+            st.subheader("📋 Останні чеки (груповані):")
+            
+            # Читаємо Excel через pandas
+            df = pd.read_excel(history_file)
+            
+            if not df.empty:
+                # Групуємо рядки за часом та майстром, щоб зібрати чек разом
+                # Оскільки кожен чек має унікальний час створення, це ідеальний ключ об'єднання
+                grouped = df.groupby(['Час', 'Майстер'])
+                
+                # Проходимося по кожному унікальному чеку (у зворотньому порядку, щоб нові були зверху)
+                for (time_val, master_val), group in list(grouped)[::-1]:
+                    # Рахуємо загальну суму цього конкретного чека
+                    total_check_sum = group['Сума (грн)'].sum()
+                    
+                    # Виводимо красиву картку чека для хоста
+                    with st.container(border=True):
+                        st.markdown(f"🕒 **Час:** {time_val} &nbsp;&nbsp;|&nbsp;&nbsp; 👤 **Майстер:** {master_val}")
+                        st.markdown("---")
+                        
+                        # Виводимо кожну послугу всередині цього чека
+                        for index, row in group.iterrows():
+                            st.write(f"• [{row['Категорія']}] **{row['Послуга/Позиція']}** — {row['Кількість']} од. × {row['Ціна за од. (грн)']} грн = **{row['Сума (грн)']} грн**")
+                        
+                        st.markdown(f"**Загальна сума чека: {total_check_sum} грн**")
         else:
             st.info("Архів чеків поки що порожній.")
+            
     elif admin_password != "":
         st.error("❌ Неправильний пароль!")
