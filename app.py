@@ -32,21 +32,26 @@ st.title("✂️ Система розрахунку послуг")
 st.markdown("Робоче місце для оформлення замовлень")
 
 # Авторизація на початку (Пункт 4)
+# Список дозволених майстрів (White List)
+ALLOWED_MASTERS = ["Микола", "Олена", "Тато", "Адмін"] # Можеш змінити на свої реальні імена
+
 if 'logged_in_master' not in st.session_state:
     st.session_state.logged_in_master = ""
 
 if not st.session_state.logged_in_master:
     st.warning("👋 Будь ласка, представтеся перед початком роботи.")
     with st.form("login_form"):
-        entered_name = st.text_input("Введіть ваше ім'я (наприклад, Тато або Олена):")
+        entered_name = st.text_input("Введіть ваше ім'я:")
         submit_login = st.form_submit_button("Увійти в систему", type="primary")
         
         if submit_login:
-            if entered_name.strip():
-                st.session_state.logged_in_master = entered_name.strip()
+            clean_name = entered_name.strip()
+            # Перевіряємо, чи є введений майстер у нашому білому списку (регістр не має значення)
+            if any(clean_name.lower() == m.lower() for m in ALLOWED_MASTERS):
+                st.session_state.logged_in_master = clean_name
                 st.rerun()
             else:
-                st.error("Будь ласка, введіть ім'я.")
+                st.error("❌ Доступ заборонено: такого майстра немає в системі.")
     st.stop()
 
 col_user1, col_user2 = st.columns([3, 1])
