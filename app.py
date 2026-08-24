@@ -31,7 +31,42 @@ st.title("✂️ Система розрахунку послуг")
 st.markdown("Робоче місце для оформлення замовлень")
 
 # Поле для ідентифікації майстра
-master_name = st.text_input("👤 Хто оформлює замовлення (Ваше ім'я):", placeholder="Наприклад: Олена")
+st.title("✂️ Система розрахунку послуг")
+st.markdown("Робоче місце для оформлення замовлень")
+
+# --- ПУНКТ 4: Авторизація на початку ---
+# Перевіряємо, чи ми вже знаємо ім'я майстра в цій сесії
+if 'logged_in_master' not in st.session_state:
+    st.session_state.logged_in_master = ""
+
+# Якщо ім'я ще не введене, показуємо віконце авторизації
+if not st.session_state.logged_in_master:
+    st.warning("👋 Будь ласка, представтеся перед початком роботи.")
+    with st.form("login_form"):
+        entered_name = st.text_input("Введіть ваше ім'я (наприклад, Тато або Олена):")
+        submit_login = st.form_submit_button("Увійти в систему", type="primary")
+        
+        if submit_login:
+            if entered_name.strip():
+                st.session_state.logged_in_master = entered_name.strip()
+                st.rerun() # Перезавантажуємо сторінку, щоб відкрити касу
+            else:
+                st.error("Будь ласка, введіть ім'я.")
+    
+    # Зупиняємо виконання решти коду, доки не здійснено вхід
+    st.stop()
+
+# Якщо вхід виконано, виводимо привітання і кнопку виходу збоку
+col_user1, col_user2 = st.columns([3, 1])
+with col_user1:
+    st.success( Працює майстер: **{st.session_state.logged_in_master}** )
+with col_user2:
+    if st.button("Змінити майстра"):
+        st.session_state.logged_in_master = ""
+        st.rerun()
+
+# Далі в коді скрізь замість старого `master_name` використовуємо `st.session_state.logged_in_master`
+master_name = st.session_state.logged_in_master
 
 st.markdown("---")
 
