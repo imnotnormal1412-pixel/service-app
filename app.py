@@ -47,7 +47,6 @@ def load_clients_base():
                         df["Кількість візитів"] = 1
                     else:
                         df[col] = ""
-            # Безпечно заповнюємо порожні значення в кількості візитів одиницею
             df["Кількість візитів"] = pd.to_numeric(df["Кількість візитів"], errors='coerce').fillna(1).astype(int)
             return df
         except Exception:
@@ -289,7 +288,6 @@ if st.session_state.cart:
                 if not match.empty:
                     is_existing_client = True
                     found_client_name = str(match.iloc[0]["Ім'я"])
-                    # Безпечне зчитування кількості візитів
                     try:
                         client_visits_count = int(match.iloc[0]["Кількість візитів"])
                     except Exception:
@@ -572,7 +570,7 @@ with st.expander("🔒 Панель хоста (Історія та аналіт
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
             
-            st.markdown---()
+            st.markdown("---")
             st.subheader("📊 Перегляд аркушів майстрів в Excel")
             
             try:
