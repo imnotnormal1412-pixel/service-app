@@ -38,7 +38,6 @@ def load_clients_base():
     
     if os.path.exists(clients_file):
         try:
-            # Зчитуємо колонку Телефони суворо як текстові рядки (dtype=str), щоб Excel не псував номери
             df = pd.read_excel(clients_file, dtype={"Телефон": str})
             for col in expected_columns:
                 if col not in df.columns:
@@ -252,21 +251,23 @@ if st.session_state.cart:
     client_visits_count = 0
     
     if not is_anon:
-        col_p1, col_p2 = st.columns([1, 4])
-        with col_p1:
-            st.text_input("Код", value="+380", disabled=True)
-        with col_p2:
-            entered_digits = st.text_input("📞 Номер телефону (без 380):", placeholder="681234567")
+        # Змінено поле: тепер майстер може спокійно вводити номер з нулем на початку (наприклад, 068...) або без нього
+        entered_phone = st.text_input("📞 Номер телефону клієнта:", placeholder="0681234567 або 681234567")
         
-        if entered_digits.strip():
-            # Залишаємо від введеного майстром лише цифри і формуємо повний номер для пошуку
-            clean_input_digits = "".join(filter(str.isdigit, entered_digits.strip()))
-            target_search_phone = f"380{clean_input_digits}"
+        if entered_phone.strip():
+            clean_input_digits = "".join(filter(str.isdigit, entered_phone.strip()))
+            
+            # Автоматично приводимо до міжнародного стандарту 380 (якщо ввели з 0 або без)
+            if clean_input_digits.startswith("380"):
+                target_search_phone = clean_input_digits
+            elif clean_input_digits.startswith("0"):
+                target_search_phone = f"380{clean_input_digits[1:]}"
+            else:
+                target_search_phone = f"380{clean_input_digits}"
             
             df_check = load_clients_base()
             
             if not df_check.empty and "Телефон" in df_check.columns:
-                # Очищаємо кожен номер у базі від будь-яких зайвих символів, апострофів чи пробілів, залишаючи самі цифри
                 df_check["ЧистийТелефон"] = df_check["Телефон"].astype(str).apply(lambda x: "".join(filter(str.isdigit, x)))
                 
                 match = df_check[df_check["ЧистийТелефон"] == target_search_phone]
@@ -275,7 +276,7 @@ if st.session_state.cart:
                     found_client_name = str(match.iloc[0]["Ім'я"])
                     client_visits_count = int(match.iloc[0]["Кількість візитів"])
                     if "Статус" in match.columns:
-                        client_status = str(match.iloc[0]["Статус"])
+                        client_status = str(match.iloc[0]["Статус"]).strip()
             
             if is_existing_client:
                 st.success(f"🌟 Знайдено в базі! Клієнт: **{found_client_name}** | Статус: **{client_status}** (Візитів: {client_visits_count})")
@@ -285,7 +286,10 @@ if st.session_state.cart:
                 already_has_discount = any("знижка" in str(item["name"]).lower() for item in st.session_state.cart)
                 
                 if not already_has_discount:
-                    if client_status.lower() == "пенсіонер":
+                    status_lower = client_status.lower()
+                    
+                    # Логіка видачі знижки відповідно до точного статусу з бази
+                    if "пенсіонер" in status_lower:
                         if st.button("👵 Застосувати пенсійну знижку (-100 грн)"):
                             disc_data = st.session_state.services.get("знижка пенсійна", {"price": 100, "is_percent": False})
                             disc_val = float(disc_data["price"])
@@ -300,8 +304,24 @@ if st.session_state.cart:
                             })
                             st.success("✨ Пенсійну знижку успішно застосовано!")
                             st.rerun()
-                    
-                    elif client_visits_count >= 2 or client_status.lower() == "постійний":
+                            
+                    elif "впо" in status_lower:
+                        if st.button("💙💛 Застосувати знижку ВПО (-15%)"):
+                            disc_data = st.session_state.services.get("знижка ВПО", {"price": 15, "is_percent": True})
+                            disc_val = float(disc_data["price"])
+                            
+                            st.session_state.cart.append({
+                                "name": f"знижка ВПО ({disc_val}%)", 
+                                "category": "Знижки",
+                                "price": -disc_val, 
+                                "qty": 1.0, 
+                                "total": -disc_val,
+                                "is_pct": True
+                            })
+                            st.success("✨ Знижку ВПО успішно застосовано!")
+                            st.rerun()
+                            
+                    elif client_visits_count >= 2 or "постійний" in status_lower:
                         if st.button("🎁 Застосувати знижку постійному клієнту (-50 грн)"):
                             disc_data = st.session_state.services.get("знижка постійному клієнту", {"price": 50, "is_percent": False})
                             disc_val = float(disc_data["price"])
@@ -327,7 +347,7 @@ if st.session_state.cart:
     col1, col2 = st.columns(2)
     with col1:
         if st.button("💾 Завершити і зберегти чек"):
-            if not is_anon and not entered_digits.strip():
+            if not is_anon and not entered_phone.strip():
                 st.error("❌ Помилка: Введіть номер телефону клієнта або позначте «Анонім»!")
             elif not is_anon and not is_existing_client and not client_name.strip():
                 st.error("❌ Помилка: Введіть ім'я нового клієнта!")
@@ -342,8 +362,14 @@ if st.session_state.cart:
                     cleaned_phone = "Анонім"
                     cleaned_name = "Анонім"
                 else:
-                    clean_input_digits = "".join(filter(str.isdigit, entered_digits.strip()))
-                    full_phone_num = f"380{clean_input_digits}"
+                    clean_input_digits = "".join(filter(str.isdigit, entered_phone.strip()))
+                    if clean_input_digits.startswith("380"):
+                        full_phone_num = clean_input_digits
+                    elif clean_input_digits.startswith("0"):
+                        full_phone_num = f"380{clean_input_digits[1:]}"
+                    else:
+                        full_phone_num = f"380{clean_input_digits}"
+                        
                     cleaned_phone = f"'{full_phone_num}"
                     cleaned_name = client_name.strip() if client_name.strip() else found_client_name
                 
@@ -495,7 +521,7 @@ with st.expander("🔒 Панель хоста (Історія та аналіт
             
         st.markdown("---")
         st.subheader("📤 Завантажити оновлену базу клієнтів (Excel)")
-        st.markdown("Тут ти можеш завантажити свій відредагований Excel-файл (зі статусами «Пенсіонер» тощо), щоб оновити базу на сервері:")
+        st.markdown("Тут ти можеш завантажити свій відредагований Excel-файл (зі статусами «ВПО», «Пенсіонер» тощо), щоб оновити базу на сервері:")
         
         uploaded_client_file = st.file_uploader("Оберіть файл `clients_base.xlsx`:", type=["xlsx"])
         if uploaded_client_file is not None:
@@ -541,24 +567,4 @@ with st.expander("🔒 Панель хоста (Історія та аналіт
                     df_sheet = pd.read_excel(history_file, sheet_name=selected_sheet)
                     
                     if "Час" in df_sheet.columns and not df_sheet.empty:
-                        df_sheet["Дата"] = pd.to_datetime(df_sheet["Час"], errors='coerce').dt.strftime("%Y-%m-%d")
-                        available_dates = df_sheet["Дата"].dropna().unique().tolist()
-                        available_dates.sort(reverse=True)
-                        
-                        selected_date = st.selectbox("📅 Фільтр за датою:", ["Усі дати"] + available_dates)
-                        if selected_date != "Усі дати":
-                            df_sheet = df_sheet[df_sheet["Дата"] == selected_date]
-                        df_sheet = df_sheet.drop(columns=["Дата"])
-                    
-                    if "Сума (грн)" in df_sheet.columns:
-                        total_rev = df_sheet["Сума (грн)"].sum()
-                        st.metric(label=f"💰 Загальна сума (Майстер: {selected_sheet})", value=f"{total_rev} грн")
-                    
-                    st.dataframe(df_sheet, use_container_width=True)
-            except Exception as e:
-                st.info(f"Помилка читання файлу: {e}")
-        else:
-            st.info("Архів чеків поки що порожній.")
-            
-    elif admin_password != "":
-        st.error("❌ Неправильний пароль!")
+                    ...
