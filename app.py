@@ -148,10 +148,16 @@ if st.session_state.cart:
             if os.path.exists(excel_file):
                 try:
                     df_old = pd.read_excel(excel_file)
+                    # Робимо перевірку: якщо старий файл має старі колонки, перезаписуємо начисто
                     if "Послуга/Позиція" not in df_old.columns:
                         df_combined = df_new
                     else:
-                        df_combined = pd.concat([df_old, df_new], ignore_index=True)
+                        # Створюємо пустий рядок-роздільник (усі значення None або порожні)
+                        empty_row = {col: None for col in df_old.columns}
+                        df_empty = pd.DataFrame([empty_row])
+                        
+                        # Об'єднуємо стару історію, пустий рядок і новий чек
+                        df_combined = pd.concat([df_old, df_empty, df_new], ignore_index=True)
                 except Exception:
                     df_combined = df_new
             else:
@@ -159,7 +165,7 @@ if st.session_state.cart:
                 
             df_combined.to_excel(excel_file, index=False)
                 
-            st.success("🎉 Чек успішно збережено в Excel!")
+            st.success("🎉 Чек успішно збережено в Excel із відступом!")
             st.session_state.cart.clear()
             st.rerun()
             
