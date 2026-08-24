@@ -186,6 +186,7 @@ col1, col2 = st.columns(2)
         if st.button("🗑️ Очистити чек"):
             st.session_state.cart.clear()
             st.rerun()
+
 else:
     st.info("Чек поки що порожній.")
 
