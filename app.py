@@ -143,45 +143,44 @@ if st.session_state.cart:
     
     st.markdown(f"### Загальна сума до сплати: {grand_total} грн")
     
-    col1, col2 = st.columns(2)
+col1, col2 = st.columns(2)
     with col1:
-# Кнопка збереження чека (перевір, щоб під `if` був правильний відступ праворуч)
-if st.button("💾 Завершити і зберегти чек"):
-    if not st.session_state.get('logged_in_master'):
-        st.error("⚠️ Введіть ім'я майстра на початку сторінки!")
-    else:
-        from datetime import datetime, timedelta
-        import pandas as pd
-        
-        now = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
-        master = st.session_state.logged_in_master
-        
-        new_rows = []
-        for item in st.session_state.cart:
-            new_rows.append({
-                "Час": now,
-                "Майстер": master,
-                "Категорія": item['category'],
-                "Послуга/Позиція": item['name'],
-                "Кількість": item['qty'],
-                "Ціна за од. (грн)": item['price'],
-                "Сума (грн)": item['total']
-            })
-        
-        excel_file = "all_sales_history.xlsx"
-        
-        if os.path.exists(excel_file):
-            df_old = pd.read_excel(excel_file)
-            df_new = pd.DataFrame(new_rows)
-            df_combined = pd.concat([df_old, df_new], ignore_index=True)
-            df_combined.to_excel(excel_file, index=False)
-        else:
-            df_new = pd.DataFrame(new_rows)
-            df_new.to_excel(excel_file, index=False)
-            
-        st.success("🎉 Чек успішно збережено в Excel-базу!")
-        st.session_state.cart.clear()
-        st.rerun()
+        if st.button("💾 Завершити і зберегти чек"):
+            if not st.session_state.get('logged_in_master'):
+                st.error("⚠️ Введіть ім'я майстра на початку сторінки!")
+            else:
+                from datetime import datetime, timedelta
+                import pandas as pd
+                
+                now = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
+                master = st.session_state.logged_in_master
+                
+                new_rows = []
+                for item in st.session_state.cart:
+                    new_rows.append({
+                        "Час": now,
+                        "Майстер": master,
+                        "Категорія": item['category'],
+                        "Послуга/Позиція": item['name'],
+                        "Кількість": item['qty'],
+                        "Ціна за од. (грн)": item['price'],
+                        "Сума (грн)": item['total']
+                    })
+                
+                excel_file = "all_sales_history.xlsx"
+                
+                if os.path.exists(excel_file):
+                    df_old = pd.read_excel(excel_file)
+                    df_new = pd.DataFrame(new_rows)
+                    df_combined = pd.concat([df_old, df_new], ignore_index=True)
+                    df_combined.to_excel(excel_file, index=False)
+                else:
+                    df_new = pd.DataFrame(new_rows)
+                    df_new.to_excel(excel_file, index=False)
+                    
+                st.success("🎉 Чек успішно збережено в Excel-базу!")
+                st.session_state.cart.clear()
+                st.rerun()
             
     with col2:
         if st.button("🗑️ Очистити чек"):
