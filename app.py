@@ -223,6 +223,7 @@ if st.session_state.cart:
     
     client_phone = ""
     client_name = ""
+    client_status = "Звичайний"
     is_existing_client = False
     found_client_name = ""
     client_visits_count = 0
@@ -239,7 +240,7 @@ if st.session_state.cart:
             client_phone = f"380{clean_digits}"
             
             clients_file = "clients_base.xlsx"
-            df_check = pd.DataFrame(columns=["Телефон", "Ім'я", "Кількість візитів", "Останній візит", "Останній майстер"])
+            df_check = pd.DataFrame(columns=["Телефон", "Ім'я", "Кількість візитів", "Статус", "Останній візит", "Останній майстер"])
             
             if os.path.exists(clients_file):
                 try:
@@ -255,39 +256,52 @@ if st.session_state.cart:
                     is_existing_client = True
                     found_client_name = str(match.iloc[0]["Ім'я"])
                     client_visits_count = int(match.iloc[0]["Кількість візитів"])
+                    if "Статус" in match.columns:
+                        client_status = str(match.iloc[0]["Статус"])
             
             if is_existing_client:
-                st.success(f"🌟 Знайдено в базі! Постійний клієнт: **{found_client_name}** (Візитів у базі: {client_visits_count})")
+                st.success(f"🌟 Знайдено в базі! Клієнт: **{found_client_name}** | Статус: **{client_status}** (Візитів: {client_visits_count})")
                 client_name = found_client_name
                 
                 # ---- ПЕРЕВІРКА: чи знижка вже додана в чек ----
-                already_has_discount = any("знижка постійному клієнту" in str(item["name"]).lower() for item in st.session_state.cart)
+                already_has_discount = any("знижка" in str(item["name"]).lower() for item in st.session_state.cart)
                 
-                if client_visits_count >= 2 and not already_has_discount:
-                    if st.button("🎁 Застосувати знижку постійному клієнту (-50 грн)"):
-                        disc_data = st.session_state.services.get("знижка постійному клієнту", {"price": 50, "is_percent": False})
-                        disc_val = float(disc_data["price"])
-                        is_pct = disc_data.get("is_percent", False)
-                        
-                        if is_pct:
-                            item_price = -disc_val
-                            item_name_display = f"знижка постійному клієнту ({disc_val}%)"
-                        else:
-                            item_price = -disc_val
-                            item_name_display = "знижка постійному клієнту"
+                if not already_has_discount:
+                    # Якщо пенсіонер — пропонуємо пенсійну знижку (вона вигідніша)
+                    if client_status.lower() == "пенсіонер":
+                        if st.button("👵 Застосувати пенсійну знижку (-100 грн)"):
+                            disc_data = st.session_state.services.get("знижка пенсійна", {"price": 100, "is_percent": False})
+                            disc_val = float(disc_data["price"])
                             
-                        st.session_state.cart.append({
-                            "name": item_name_display, 
-                            "category": "Знижки",
-                            "price": item_price, 
-                            "qty": 1.0, 
-                            "total": item_price,
-                            "is_pct": is_pct
-                        })
-                        st.success("✨ Знижка постійного клієнта успішно додана до чека!")
-                        st.rerun()
-                elif already_has_discount:
-                    st.info("✅ Знижка постійному клієнту вже застосована до цього чека.")
+                            st.session_state.cart.append({
+                                "name": "знижка пенсійна", 
+                                "category": "Знижки",
+                                "price": -disc_val, 
+                                "qty": 1.0, 
+                                "total": -disc_val,
+                                "is_pct": False
+                            })
+                            st.success("✨ Пенсійну знижку успішно застосовано!")
+                            st.rerun()
+                    
+                    # Якщо постійний клієнт (візитів >= 2 або статус постійний)
+                    elif client_visits_count >= 2 or client_status.lower() == "постійний":
+                        if st.button("🎁 Застосувати знижку постійному клієнту (-50 грн)"):
+                            disc_data = st.session_state.services.get("знижка постійному клієнту", {"price": 50, "is_percent": False})
+                            disc_val = float(disc_data["price"])
+                            
+                            st.session_state.cart.append({
+                                "name": "знижка постійному клієнту", 
+                                "category": "Знижки",
+                                "price": -disc_val, 
+                                "qty": 1.0, 
+                                "total": -disc_val,
+                                "is_pct": False
+                            })
+                            st.success("✨ Знижку постійного клієнта успішно застосовано!")
+                            st.rerun()
+                else:
+                    st.info("✅ Знижка вже застосована до цього чека.")
             else:
                 st.info("💡 Номер новий для системи. Будь ласка, вкажіть ім'я клієнта нижче:")
                 client_name = st.text_input("👤 Ім'я нового клієнта:", placeholder="Наприклад: Олена")
@@ -311,9 +325,11 @@ if st.session_state.cart:
                 if is_anon:
                     cleaned_phone = "Анонім"
                     cleaned_name = "Анонім"
+                    cleaned_status = "Анонім"
                 else:
                     cleaned_phone = f"'{client_phone}"
                     cleaned_name = client_name.strip() if client_name.strip() else found_client_name
+                    cleaned_status = client_status
                 
                 # --- ОНОВЛЕННЯ / ЗБЕРЕЖЕННЯ БАЗИ КЛІЄНТІВ ---
                 if not is_anon:
@@ -321,9 +337,9 @@ if st.session_state.cart:
                         try:
                             df_clients = pd.read_excel(clients_file)
                         except Exception:
-                            df_clients = pd.DataFrame(columns=["Телефон", "Ім'я", "Кількість візитів", "Останній візит", "Останній майстер"])
+                            df_clients = pd.DataFrame(columns=["Телефон", "Ім'я", "Кількість візитів", "Статус", "Останній візит", "Останній майстер"])
                     else:
-                        df_clients = pd.DataFrame(columns=["Телефон", "Ім'я", "Кількість візитів", "Останній візит", "Останній майстер"])
+                        df_clients = pd.DataFrame(columns=["Телефон", "Ім'я", "Кількість візитів", "Статус", "Останній візит", "Останній майстер"])
                     
                     if not df_clients.empty and "Телефон" in df_clients.columns:
                         df_clients["ЧистийТелефон"] = df_clients["Телефон"].astype(str).apply(lambda x: "".join(filter(str.isdigit, x)))
@@ -336,11 +352,15 @@ if st.session_state.cart:
                             df_clients.loc[idx, "Останній майстер"] = master
                             if cleaned_name and cleaned_name != "Без імені":
                                 df_clients.loc[idx, "Ім'я"] = cleaned_name
+                            # Зберігаємо статус, якщо він був заданий або змінений
+                            if "Статус" not in df_clients.columns:
+                                df_clients["Статус"] = "Звичайний"
                         else:
                             new_client_row = pd.DataFrame([{
                                 "Телефон": cleaned_phone,
                                 "Ім'я": cleaned_name,
                                 "Кількість візитів": 1,
+                                "Статус": "Звичайний",
                                 "Останній візит": today_date_only,
                                 "Останній майстер": master
                             }])
@@ -350,6 +370,7 @@ if st.session_state.cart:
                             "Телефон": cleaned_phone,
                             "Ім'я": cleaned_name,
                             "Кількість візитів": 1,
+                            "Статус": "Звичайний",
                             "Останній візит": today_date_only,
                             "Останній майстер": master
                         }])
