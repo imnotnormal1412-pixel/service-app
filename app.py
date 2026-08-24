@@ -130,9 +130,25 @@ if st.session_state.cart:
             now = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
             master = st.session_state.logged_in_master
             
+            history_file = "all_sales_history.xlsx"
+            
+            # Автоматично визначаємо номер нового чека на основі попередніх даних
+            next_receipt_num = 1
+            if os.path.exists(history_file):
+                try:
+                    df_check = pd.read_excel(history_file)
+                    if "№ чека" in df_check.columns:
+                        # Знаходимо максимальний номер чека і додаємо 1
+                        valid_nums = df_check["№ чека"].dropna()
+                        if not valid_nums.empty:
+                            next_receipt_num = int(valid_nums.max()) + 1
+                except Exception:
+                    pass
+            
             new_rows = []
             for item in st.session_state.cart:
                 new_rows.append({
+                    "№ чека": next_receipt_num,
                     "Час": now,
                     "Майстер": master,
                     "Категорія": item['category'],
@@ -142,7 +158,6 @@ if st.session_state.cart:
                     "Сума (грн)": item['total']
                 })
             
-            history_file = "all_sales_history.xlsx"
             df_new = pd.DataFrame(new_rows)
             
             if os.path.exists(history_file):
@@ -161,7 +176,7 @@ if st.session_state.cart:
                 
             df_combined.to_excel(history_file, index=False)
                 
-            st.success("🎉 Чек успішно збережено в Excel із відступом!")
+            st.success(f"🎉 Чек №{next_receipt_num} успішно збережено в Excel!")
             st.session_state.cart.clear()
             st.rerun()
             
@@ -181,7 +196,6 @@ with st.expander("🔒 Панель хоста (Історія всіх чекі
         st.success("Доступ дозволено!")
         history_file = "all_sales_history.xlsx"
         
-        # Кнопка для повного очищення бази на сайті
         if st.button("🗑️ Очистити всю історію (видалити файл бази)"):
             if os.path.exists(history_file):
                 os.remove(history_file)
