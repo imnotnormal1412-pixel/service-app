@@ -3,6 +3,9 @@ from datetime import datetime, timedelta
 import os
 import pandas as pd
 
+# Список дозволених майстрів (White List) - Пункт 4
+ALLOWED_MASTERS = ["Микола", "Олена", "Тато", "Адмін"]
+
 # База послуг із категоріями та цінами за замовчуванням
 if 'services' not in st.session_state:
     st.session_state.services = {
@@ -31,22 +34,18 @@ if 'cart' not in st.session_state:
 st.title("✂️ Система розрахунку послуг")
 st.markdown("Робоче місце для оформлення замовлень")
 
-# Авторизація на початку (Пункт 4)
-# Список дозволених майстрів (White List)
-ALLOWED_MASTERS = ["Микола", "Олена", "Тато", "Адмін"] # Можеш змінити на свої реальні імена
-
+# Авторизація через Білий список (Пункт 4)
 if 'logged_in_master' not in st.session_state:
     st.session_state.logged_in_master = ""
 
 if not st.session_state.logged_in_master:
-    st.warning("👋 Будь ласка, представтеся перед початком роботи.")
+    st.warning("👋 Будь ласка, введіть ваше ім'я для входу.")
     with st.form("login_form"):
-        entered_name = st.text_input("Введіть ваше ім'я:")
+        entered_name = st.text_input("Ім'я майстра:")
         submit_login = st.form_submit_button("Увійти в систему", type="primary")
         
         if submit_login:
             clean_name = entered_name.strip()
-            # Перевіряємо, чи є введений майстер у нашому білому списку (регістр не має значення)
             if any(clean_name.lower() == m.lower() for m in ALLOWED_MASTERS):
                 st.session_state.logged_in_master = clean_name
                 st.rerun()
@@ -83,49 +82,111 @@ else:
 
 # Можливість змінити кількість та ціну
 qty = st.number_input("Кількість / Години", min_value=0.1, value=1.0, step=0.5)
-price = st.number_input("Ціна за одиницю (грн)", min_value=0.0, value=current_price, step=10.0)
 
-# Блок додавання нової послуги чи знижки
-with st.expander("➕ Додати нову послугу або знижку в базу"):
-    new_name = st.text_input("Назва")
-    new_cat = st.selectbox("Категорія:", categories, key="new_cat_select")
-    new_price = st.number_input("Сума (грн)", min_value=0.0, value=0.0, key="new_price_input")
+# ПУНКТ 6: Тип знижки (гривні чи відсотки)
+is_percentage_discount = False
+if selected_category == "Знижки":
+    discount_type = st.radio("Тип знижки:", ["Фіксована сума (грн)", "Відсоток від суми чека (%)"], horizontal=True)
+    if discount_type == "Відсоток від суми чека (%)":
+        is_percentage_discount = True
+        price = st.number_input("Знижка у відсотках (%)", min_value=0.0, max_value=100.0, value=10.0, step=1.0)
+    else:
+        price = st.number_input("Сума знижки (грн)", min_value=0.0, value=current_price, step=10.0)
+else:
+    price = st.number_input("Ціна за одиницю (грн)", min_value=0.0, value=current_price, step=10.0)
+
+# Додати нову послугу або знижку ТІЛЬКИ до поточного чека (Пункт 3)
+with st.expander("➕ Додати нову послугу або знижку до чека"):
+    custom_name = st.text_input("Назва позиції або знижки")
+    custom_cat = st.selectbox("Категорія:", categories, key="custom_cat_select")
     
-    if st.button("Зберегти в базу"):
-        if new_name.strip() and new_price > 0:
-            clean_name = new_name.strip().lower()
-            st.session_state.services[clean_name] = {"category": new_cat, "price": new_price}
-            st.success(f"Успішно додано до категорії '{new_cat}'!")
+    if custom_cat == "Знижки":
+        custom_is_pct = st.checkbox("Це знижка у відсотках (%)?")
+        custom_price = st.number_input("Значення (грн або %)", min_value=0.0, value=0.0, key="custom_price_input")
+    else:
+        custom_is_pct = False
+        custom_price = st.number_input("Сума (грн)", min_value=0.0, value=0.0, key="custom_price_input")
+    
+    if st.button("Додати цю позицію до чека"):
+        if custom_name.strip() and custom_price > 0:
+            if custom_cat == "Знижки":
+                if custom_is_pct:
+                    item_price = -custom_price
+                    item_name_display = f"{custom_name.strip()} ({custom_price}%)"
+                else:
+                    item_price = -custom_price
+                    item_name_display = custom_name.strip()
+            else:
+                item_price = custom_price
+                item_name_display = custom_name.strip()
+            
+            st.session_state.cart.append({
+                "name": item_name_display, 
+                "category": custom_cat,
+                "price": item_price, 
+                "qty": 1.0, 
+                "total": item_price,
+                "is_pct": custom_is_pct if custom_cat == "Знижки" else False
+            })
+            st.success(f"Успішно додано до поточного чека: {item_name_display}!")
             st.rerun()
         else:
-            st.error("Введіть назву та коректну суму.")
+            st.error("Введіть назву та коректне значення.")
 
-# Кнопка додавання до поточного чека
+# Кнопка додавання обраної зі списку послуги до чека
 if st.button("Додати до чека", type="primary"):
     if not selected_service:
         st.error("Оберіть позицію зі списку.")
     else:
-        item_price = -price if selected_category == "Знижки" else price
-        total = qty * item_price
+        if selected_category == "Знижки" and is_percentage_discount:
+            item_price = -price
+            item_name_display = f"{selected_service} ({price}%)"
+            total = -price
+        else:
+            item_price = -price if selected_category == "Знижки" else price
+            item_name_display = selected_service
+            total = qty * item_price
         
         st.session_state.cart.append({
-            "name": selected_service, 
+            "name": item_name_display, 
             "category": selected_category,
             "price": item_price, 
             "qty": qty, 
-            "total": total
+            "total": total,
+            "is_pct": is_percentage_discount if selected_category == "Знижки" else False
         })
-        st.success(f"Додано до чека: {selected_service}")
+        st.success(f"Додано до чека: {item_name_display}")
 
 # Відображення поточного чека
 st.markdown("---")
 st.subheader("🧾 Поточний чек клієнта")
 
 if st.session_state.cart:
+    subtotal = sum(item['total'] for item in st.session_state.cart if not item.get('is_pct'))
+    
     grand_total = 0
-    for i, item in enumerate(st.session_state.cart):
-        st.write(f"**{i+1}. [{item['category']}] {item['name']}** — {item['qty']} од. x {item['price']} грн = **{item['total']} грн**")
-        grand_total += item['total']
+    calculated_cart = []
+    
+    for item in st.session_state.cart:
+        if item.get('is_pct'):
+            pct_value = abs(item['price'])
+            item_total = -round(subtotal * (pct_value / 100.0), 2)
+            item_display_price = f"-{pct_value}%"
+        else:
+            item_total = item['total']
+            item_display_price = f"{item['price']} грн"
+            
+        calculated_cart.append({
+            "name": item['name'],
+            "category": item['category'],
+            "price_display": item_display_price,
+            "qty": item['qty'],
+            "total": item_total
+        })
+        grand_total += item_total
+
+    for i, item in enumerate(calculated_cart):
+        st.write(f"**{i+1}. [{item['category']}] {item['name']}** — {item['qty']} од. x {item['price_display']} = **{item['total']} грн**")
     
     st.markdown(f"### Загальна сума до сплати: {grand_total} грн")
     
@@ -134,24 +195,24 @@ if st.session_state.cart:
         if st.button("💾 Завершити і зберегти чек"):
             now = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
             master = st.session_state.logged_in_master
-            
             history_file = "all_sales_history.xlsx"
             
-            # Автоматично визначаємо номер нового чека на основі попередніх даних
+            # Визначаємо номер чека для майстра на його сторінці
             next_receipt_num = 1
             if os.path.exists(history_file):
                 try:
-                    df_check = pd.read_excel(history_file)
-                    if "№ чека" in df_check.columns:
-                        # Знаходимо максимальний номер чека і додаємо 1
-                        valid_nums = df_check["№ чека"].dropna()
-                        if not valid_nums.empty:
-                            next_receipt_num = int(valid_nums.max()) + 1
+                    xls = pd.ExcelFile(history_file)
+                    if master in xls.sheet_names:
+                        df_master_old = pd.read_excel(history_file, sheet_name=master)
+                        if "№ чека" in df_master_old.columns:
+                            valid_nums = df_master_old["№ чека"].dropna()
+                            if not valid_nums.empty:
+                                next_receipt_num = int(valid_nums.max()) + 1
                 except Exception:
                     pass
             
             new_rows = []
-            for item in st.session_state.cart:
+            for item in calculated_cart:
                 new_rows.append({
                     "№ чека": next_receipt_num,
                     "Час": now,
@@ -159,29 +220,32 @@ if st.session_state.cart:
                     "Категорія": item['category'],
                     "Послуга/Позиція": item['name'],
                     "Кількість": item['qty'],
-                    "Ціна за од. (грн)": item['price'],
+                    "Ціна за од. / Значення": item['price_display'],
                     "Сума (грн)": item['total']
                 })
             
             df_new = pd.DataFrame(new_rows)
             
+            # Зберігаємо на окрему сторінку (аркуш) майстра в Excel
             if os.path.exists(history_file):
-                try:
-                    df_old = pd.read_excel(history_file)
-                    if "Послуга/Позиція" not in df_old.columns:
+                with pd.ExcelWriter(history_file, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                    try:
+                        df_old_master = pd.read_excel(history_file, sheet_name=master)
+                        if "Послуга/Позиція" not in df_old_master.columns:
+                            df_combined = df_new
+                        else:
+                            empty_row = {col: None for col in df_old_master.columns}
+                            df_empty = pd.DataFrame([empty_row])
+                            df_combined = pd.concat([df_old_master, df_empty, df_new], ignore_index=True)
+                    except Exception:
                         df_combined = df_new
-                    else:
-                        empty_row = {col: None for col in df_old.columns}
-                        df_empty = pd.DataFrame([empty_row])
-                        df_combined = pd.concat([df_old, df_empty, df_new], ignore_index=True)
-                except Exception:
-                    df_combined = df_new
+                    
+                    df_combined.to_excel(writer, sheet_name=master, index=False)
             else:
-                df_combined = df_new
+                with pd.ExcelWriter(history_file, engine='openpyxl') as writer:
+                    df_new.to_excel(writer, sheet_name=master, index=False)
                 
-            df_combined.to_excel(history_file, index=False)
-                
-            st.success(f"🎉 Чек №{next_receipt_num} успішно збережено в Excel!")
+            st.success(f"🎉 Чек №{next_receipt_num} успішно збережено в Excel на сторінку майстра '{master}'!")
             st.session_state.cart.clear()
             st.rerun()
             
@@ -192,17 +256,16 @@ if st.session_state.cart:
 else:
     st.info("Поки що порожній чек.")
 
-# --- ЗАХИЩЕНА ПАНЕЛЬ ХОСТА (Пункт 5: розділення по майстрах та сума) ---
+# --- ЗАХИЩЕНА ПАНЕЛЬ ХОСТА (Пункт 5: перегляд по сторінках-майстрах та сума) ---
 st.markdown("---")
 with st.expander("🔒 Панель хоста (Історія та аналітика за майстрами)"):
-    admin_password = st.text_input("Введіть пароль адміністратора:", type="password", key="admin_pass_input")
+    admin_password = st.text_input("Введіть пароль адміністратора:", type="password")
     
     if admin_password == "1234":
         st.success("Доступ дозволено!")
         history_file = "all_sales_history.xlsx"
         
-        # Кнопка очищення історії
-        if st.button("🗑️ Очистити всю історію (видалити файл бази)", key="clear_history_btn"):
+        if st.button("🗑️ Очистити всю історію (видалити файл бази)"):
             if os.path.exists(history_file):
                 os.remove(history_file)
                 st.success("Архів успішно очищено!")
@@ -222,48 +285,36 @@ with st.expander("🔒 Панель хоста (Історія та аналіт
             )
             
             st.markdown("---")
-            st.subheader("📊 Фільтрація та аналітика за майстрами")
+            st.subheader("📊 Перегляд аркушів майстрів в Excel")
             
             try:
-                df = pd.read_excel(history_file)
-                if not df.empty and "Майстер" in df.columns:
-                    # Отримуємо список унікальних майстрів
-                    unique_masters = df["Майстер"].dropna().unique().tolist()
-                    selected_master_filter = st.selectbox("👤 Оберіть майстра:", ["Усі майстри"] + unique_masters)
+                xls = pd.ExcelFile(history_file)
+                sheet_names = xls.sheet_names
+                
+                selected_sheet = st.selectbox("👤 Оберіть аркуш майстра:", sheet_names)
+                
+                if selected_sheet:
+                    df_sheet = pd.read_excel(history_file, sheet_name=selected_sheet)
                     
-                    # Фільтруємо за майстром
-                    if selected_master_filter != "Усі майстри":
-                        df_filtered = df[df["Майстер"] == selected_master_filter]
-                    else:
-                        df_filtered = df
-                    
-                    # Додаємо фільтрацію за конкретною датою (щоб зручно бачити суму за день)
-                    if "Час" in df_filtered.columns:
-                        # Витягуємо дати з колонки часу (формат "РРРР-ММ-ДД")
-                        df_filtered["Дата"] = pd.to_datetime(df_filtered["Час"]).dt.strftime("%Y-%m-%d")
-                        available_dates = df_filtered["Дата"].dropna().unique().tolist()
-                        available_dates.sort(reverse=True) # Новіші дати зверху
+                    # Фільтрація за датою для зручності
+                    if "Час" in df_sheet.columns and not df_sheet.empty:
+                        df_sheet["Дата"] = pd.to_datetime(df_sheet["Час"]).dt.strftime("%Y-%m-%d")
+                        available_dates = df_sheet["Дата"].dropna().unique().tolist()
+                        available_dates.sort(reverse=True)
                         
-                        selected_date_filter = st.selectbox("📅 Оберіть дату:", ["Усі дати"] + available_dates)
-                        
-                        if selected_date_filter != "Усі дати":
-                            df_filtered = df_filtered[df_filtered["Дата"] == selected_date_filter]
-                        
-                        # Прибираємо тимчасову колонку дати перед виведенням, щоб не заважала
-                        df_filtered = df_filtered.drop(columns=["Дата"])
+                        selected_date = st.selectbox("📅 Фільтр за датою:", ["Усі дати"] + available_dates)
+                        if selected_date != "Усі дати":
+                            df_sheet = df_sheet[df_sheet["Дата"] == selected_date]
+                        df_sheet = df_sheet.drop(columns=["Дата"])
                     
-                    # Рахуємо загальну суму по відфільтрованих записах (унікальні чеки або сума рядків)
-                    if "Сума (грн)" in df_filtered.columns:
-                        total_revenue = df_filtered["Сума (грн)"].sum()
-                        label_text = f"💰 Загальна сума (Майстер: {selected_master_filter})"
-                        st.metric(label=label_text, value=f"{total_revenue} грн")
+                    # Підрахунок загальної суми
+                    if "Сума (грн)" in df_sheet.columns:
+                        total_rev = df_sheet["Сума (грн)"].sum()
+                        st.metric(label=f"💰 Загальна сума (Майстер: {selected_sheet})", value=f"{total_rev} грн")
                     
-                    # Виводимо саму таблицю з чеками обраного майстра
-                    st.dataframe(df_filtered, use_container_width=True)
-                else:
-                    st.info("Архів порожній або оновлюється.")
+                    st.dataframe(df_sheet, use_container_width=True)
             except Exception as e:
-                st.info(f"Архів чеків оновлюється або має стару структуру. (Помилка: {e})")
+                st.info(f"Помилка читання файлу: {e}")
         else:
             st.info("Архів чеків поки що порожній.")
             
