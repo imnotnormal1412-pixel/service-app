@@ -39,7 +39,6 @@ def load_clients_base():
     if os.path.exists(clients_file):
         try:
             df = pd.read_excel(clients_file)
-            # Перевіряємо, чи є всі колонки, якщо чогось немає — додаємо
             for col in expected_columns:
                 if col not in df.columns:
                     if col == "Статус":
@@ -52,7 +51,6 @@ def load_clients_base():
         except Exception:
             pass
     
-    # Якщо файлу немає або він пошкоджений — створюємо новий базовий
     return pd.DataFrame(columns=expected_columns)
 
 st.title("✂️ Система розрахунку послуг")
@@ -284,7 +282,6 @@ if st.session_state.cart:
                 already_has_discount = any("знижка" in str(item["name"]).lower() for item in st.session_state.cart)
                 
                 if not already_has_discount:
-                    # Якщо пенсіонер — пропонуємо пенсійну знижку
                     if client_status.lower() == "пенсіонер":
                         if st.button("👵 Застосувати пенсійну знижку (-100 грн)"):
                             disc_data = st.session_state.services.get("знижка пенсійна", {"price": 100, "is_percent": False})
@@ -301,7 +298,6 @@ if st.session_state.cart:
                             st.success("✨ Пенсійну знижку успішно застосовано!")
                             st.rerun()
                     
-                    # Якщо постійний клієнт
                     elif client_visits_count >= 2 or client_status.lower() == "постійний":
                         if st.button("🎁 Застосувати знижку постійному клієнту (-50 грн)"):
                             disc_data = st.session_state.services.get("знижка постійному клієнту", {"price": 50, "is_percent": False})
@@ -475,13 +471,6 @@ with st.expander("🔒 Панель хоста (Історія та аналіт
         
         st.subheader("👥 Клієнтська база")
         
-        # Кнопка для оновлення файлу бази клієнтів із новими колонками якщо треба
-        if st.button("🔄 Оновити структуру бази клієнтів (додати колонку Статус)"):
-            df_fix = load_clients_base()
-            df_fix.to_excel(clients_file, index=False)
-            st.success("Структуру бази успішно оновлено!")
-            st.rerun()
-            
         if os.path.exists(clients_file):
             with open(clients_file, "rb") as f:
                 client_excel_bytes = f.read()
@@ -498,7 +487,23 @@ with st.expander("🔒 Панель хоста (Історія та аналіт
                 pass
         else:
             st.info("Клієнтська база поки що пуста.")
+            
+        # НОВИЙ БЛОК: ЗАВАНТАЖЕННЯ ОНОВЛЕНОГО EXCEL-ФАЙЛУ БАЗИ НА СЕРВЕР
+        st.markdown("---")
+        st.subheader("📤 Завантажити оновлену базу клієнтів (Excel)")
+        st.markdown("Тут ти можеш завантажити свій відредагований Excel-файл (зі статусами «Пенсіонер» тощо), щоб оновити базу на сервері:")
         
+        uploaded_client_file = st.file_uploader("Оберіть файл `clients_base.xlsx`:", type=["xlsx"])
+        if uploaded_client_file is not None:
+            if st.button("💾 Застосувати та замінити базу на сервері"):
+                try:
+                    df_uploaded = pd.read_excel(uploaded_client_file)
+                    df_uploaded.to_excel(clients_file, index=False)
+                    st.success("🎉 Базу клієнтів успішно оновлено на сервері! Сторінка зараз перезапуститься.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Помолка при читанні файлу: {e}")
+
         st.markdown("---")
         if st.button("🗑️ Очистити всю історію чеків (файл продажів)"):
             if os.path.exists(history_file):
