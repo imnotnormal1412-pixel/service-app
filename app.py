@@ -228,16 +228,13 @@ if st.session_state.cart:
     client_visits_count = 0
     
     if not is_anon:
-        # Автоматично підказуємо префікс +380
         col_p1, col_p2 = st.columns([1, 4])
         with col_p1:
             st.text_input("Код", value="+380", disabled=True)
         with col_p2:
             entered_digits = st.text_input("📞 Номер телефону (без 380):", placeholder="681234567")
         
-        # Об'єднуємо код і те, що ввів майстер
         if entered_digits.strip():
-            # Очищуємо цифри і формуємо повний номер із 380 на початку
             clean_digits = "".join(filter(str.isdigit, entered_digits.strip()))
             client_phone = f"380{clean_digits}"
             
@@ -286,7 +283,6 @@ if st.session_state.cart:
                     cleaned_phone = "Анонім"
                     cleaned_name = "Анонім"
                 else:
-                    # Зберігаємо у вигляді тексту з апострофом перед 380, щоб Excel не перетворив на число без нуля
                     cleaned_phone = f"'{client_phone}"
                     cleaned_name = client_name.strip() if client_name.strip() else found_client_name
                 
@@ -447,7 +443,7 @@ with st.expander("🔒 Панель хоста (Історія та аналіт
                 st.warning("Файл історії вже порожній.")
         
         if os.path.exists(history_file):
-            with open(history_file, "rb`) as f:
+            with open(history_file, "rb") as f:
                 excel_bytes = f.read()
             
             st.download_button(
