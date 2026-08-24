@@ -219,7 +219,6 @@ if st.session_state.cart:
     
     st.markdown("---")
     
-    # Чекбокс на випадок анонімного клієнта
     is_anon = st.checkbox("👤 Клієнт без номера телефону (анонім)")
     
     client_phone = ""
@@ -231,7 +230,6 @@ if st.session_state.cart:
     if not is_anon:
         client_phone = st.text_input("📞 Номер телефону клієнта:", placeholder="Наприклад: 0671234567")
         
-        # Перевіряємо в базі, чи існує такий номер
         if client_phone.strip():
             clients_file = "clients_base.xlsx"
             if os.path.exists(clients_file):
@@ -239,20 +237,20 @@ if st.session_state.cart:
                     df_check = pd.read_excel(clients_file)
                     if not df_check.empty and "Телефон" in df_check.columns:
                         df_check["Телефон"] = df_check["Телефон"].astype(str)
-                        match = df_check[df_check["Телефон"] == client_phone.strip()]
+                        cleaned_input_phone = client_phone.strip()
+                        
+                        match = df_check[df_check["Телефон"] == cleaned_input_phone]
                         if not match.empty:
                             is_existing_client = True
-                            found_client_name = match.iloc[0]["Ім'я"]
+                            found_client_name = str(match.iloc[0]["Ім'я"])
                             client_visits_count = int(match.iloc[0]["Кількість візитів"])
                 except Exception:
                     pass
             
-            # Якщо клієнт є в базі — показуємо підказку і не вимагаємо ім'я
             if is_existing_client:
-                st.success(f"🌟 Знайдено в базі! Постійний клієнт: **{found_client_name}** (Візитів: {client_visits_count})")
+                st.success(f"🌟 Знайдено в базі! Постійний клієнт: **{found_client_name}** (Візитів у базі: {client_visits_count})")
                 client_name = found_client_name
             else:
-                # Якщо номера немає в базі — ВИЛАЗИТЬ ВІКОНЕЧКО ДЛЯ ІМЕНІ!
                 st.info("💡 Номер новий для системи. Будь ласка, вкажіть ім'я клієнта нижче:")
                 client_name = st.text_input("👤 Ім'я нового клієнта:", placeholder="Наприклад: Олена")
     
@@ -261,7 +259,6 @@ if st.session_state.cart:
     col1, col2 = st.columns(2)
     with col1:
         if st.button("💾 Завершити і зберегти чек"):
-            # Перевірки перед збереженням
             if not is_anon and not client_phone.strip():
                 st.error("❌ Помилка: Введіть номер телефону клієнта або позначте «Анонім»!")
             elif not is_anon and not is_existing_client and not client_name.strip():
@@ -273,15 +270,14 @@ if st.session_state.cart:
                 history_file = "all_sales_history.xlsx"
                 clients_file = "clients_base.xlsx"
                 
-                # Формуємо дані для збереження
                 if is_anon:
                     cleaned_phone = "Анонім"
                     cleaned_name = "Анонім"
                 else:
                     cleaned_phone = client_phone.strip()
-                    cleaned_name = client_name.strip()
+                    cleaned_name = client_name.strip() if client_name.strip() else found_client_name
                 
-                # --- РОБОТА З БАЗОЮ КЛІЄНТІВ (якщо не анонім) ---
+                # --- ОНОВЛЕННЯ / ЗБЕРЕЖЕННЯ БАЗИ КЛІЄНТІВ ---
                 if not is_anon:
                     if os.path.exists(clients_file):
                         try:
