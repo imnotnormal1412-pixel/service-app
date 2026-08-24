@@ -144,26 +144,23 @@ if st.session_state.cart:
             }
             
             excel_file = "all_sales_history.xlsx"
-                        
-                        df_new = pd.DataFrame([new_row])
-                        
-                        # Якщо файл вже є, читаємо його і перевіряємо колонки
-                        if os.path.exists(excel_file):
-                            try:
-                                df_old = pd.read_excel(excel_file)
-                                # Якщо старі колонки не збігаються з новими, почнемо таблицю наново, щоб не було плутанини
-                                if "Склад чека (Послуги/Матеріали)" not in df_old.columns:
-                                    df_combined = df_new
-                                else:
-                                    df_combined = pd.concat([df_old, df_new], ignore_index=True)
-                            except Exception:
-                                df_combined = df_new
-                        else:
-                            df_combined = df_new
-                            
-                        df_combined.to_excel(excel_file, index=False)
+            df_new = pd.DataFrame([new_row])
+            
+            if os.path.exists(excel_file):
+                try:
+                    df_old = pd.read_excel(excel_file)
+                    if "Склад чека (Послуги/Матеріали)" not in df_old.columns:
+                        df_combined = df_new
+                    else:
+                        df_combined = pd.concat([df_old, df_new], ignore_index=True)
+                except Exception:
+                    df_combined = df_new
+            else:
+                df_combined = df_new
                 
-            st.success("🎉 Чек успішно збережено в Excel-базу як єдиний рядок!")
+            df_combined.to_excel(excel_file, index=False)
+                
+            st.success("🎉 Чек успішно збережено в Excel-базу!")
             st.session_state.cart.clear()
             st.rerun()
             
@@ -209,7 +206,7 @@ with st.expander("🔒 Панель хоста (Історія всіх чекі
                 else:
                     st.info("Формат файлу історії оновлюється. Зробіть новий чек.")
             except Exception:
-                st.info("Архів чеків оновлено. Зробіть перший новий чек.")
+                st.info("Архів чеків оновлено. Зробіть новий чек.")
         else:
             st.info("Архів чеків поки що порожній.")
             
