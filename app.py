@@ -108,7 +108,8 @@ if st.session_state.cart:
             if not master_name.strip():
                 st.error("⚠️ Введіть ім'я майстра на початку сторінки!")
             else:
-                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                from datetime import datetime, timedelta
+                now = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
                 
                 history_record = f"Час: {now} | Майстер: {master_name} | Загалом: {grand_total} грн\n"
                 for item in st.session_state.cart:
