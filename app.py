@@ -56,16 +56,22 @@ qty = st.number_input("Кількість / Години", min_value=0.1, value=
 price = st.number_input("Ціна за одиницю (грн)", min_value=0.0, value=current_price, step=10.0)
 
 # Блок додавання нової послуги чи знижки
-with st.expander("➕ Додати нову послугу або знижку в базу"):
-    new_name = st.text_input("Назва (наприклад, 'знижка 10% або назва акції')")
-    new_cat = st.selectbox("Категорія:", categories, key="new_cat_select")
-    new_price = st.number_input("Сума (грн)", min_value=0.0, value=0.0, key="new_price_input")
-    
-    if st.button("Зберегти в базу"):
-        if new_name.strip() and new_price > 0:
-            clean_name = new_name.strip().lower()
-            st.session_state.services[clean_name] = {"category": new_cat, "price": new_price}
-            st.success(f"Успішно додано до категорії '{new_cat}'!")
+with st.expander("➕ Додати нову послугу або знижку до чеку"):
+    custom_name = st.text_input("Назва позиції")
+    custom_price = st.number_input("Сума (грн)", min_value=0.0, value=0.0, key="cust_p")
+    is_discount = st.checkbox("Це знижка (віднімати від суми)?", key="cust_d")
+
+    if st.button("Додати цю позицію до чека"):
+        if custom_name.strip() and custom_price > 0:
+            p_val = -custom_price if is_discount else custom_price
+            st.session_state.cart.append({
+                "name": custom_name.strip(),
+                "category": "Знижки" if is_discount else "Кастомні",
+                "price": p_val,
+                "qty": 1.0,
+                "total": p_val
+            } )
+            st.success(f"Позицію '{custom_name}' додано до чека!")
             st.rerun()
         else:
             st.error("Введіть назву та коректну суму.")
