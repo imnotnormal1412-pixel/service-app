@@ -62,6 +62,40 @@ with col_user2:
         st.rerun()
 
 master_name = st.session_state.logged_in_master
+
+# --- НОВИНКА: Блок «Статистика за сьогодні» для самого майстра ---
+history_file = "all_sales_history.xlsx"
+today_str = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d")
+
+today_receipts_count = 0
+today_revenue = 0
+
+if os.path.exists(history_file):
+    try:
+        xls = pd.ExcelFile(history_file)
+        if master_name in xls.sheet_names:
+            df_m = pd.read_excel(history_file, sheet_name=master_name)
+            if "Час" in df_m.columns and "Сума (грн)" in df_m.columns and not df_m.empty:
+                df_m["Дата"] = pd.to_datetime(df_m["Час"], errors='coerce').dt.strftime("%Y-%m-%d")
+                df_today = df_m[df_m["Дата"] == today_str]
+                if not df_today.empty:
+                    # Рахуємо унікальні чеки за сьогодні та їхню суму
+                    if "№ чека" in df_today.columns:
+                        today_receipts_count = df_today["№ чека"].nunique()
+                    # Беремо тільки рядки з підсумками або рахуємо по унікальних чеках, щоб не задвоювати послуги
+                    df_totals_today = df_today[df_today["Категорія"] == "--- ЗАГАЛОМ ЗА ЧЕК ---"]
+                    if not df_totals_today.empty:
+                        today_revenue = df_totals_today["Сума (грн)"].sum()
+    except Exception:
+        pass
+
+# Виводимо гарні метрики для майстра
+col_stat1, col_stat2 = st.columns(2)
+with col_stat1:
+    st.metric(label="📊 Ваших чеків сьогодні", value=today_receipts_count)
+with col_stat2:
+    st.metric(label="💰 Ваша виручка за сьогодні", value=f"{today_revenue} грн")
+
 st.markdown("---")
 
 # 1. Вибираємо категорію
@@ -191,7 +225,6 @@ if st.session_state.cart:
     
     st.markdown(f"### Загальна сума до сплати: {grand_total} грн")
     
-    # ПОКРАЩЕННЯ: Поле для коментаря до чека
     receipt_comment = st.text_input("💬 Коментар або примітка до чека (необов'язково):", placeholder="Наприклад: клієнтка Оля, просила додатковий догляд...")
     
     col1, col2 = st.columns(2)
@@ -215,7 +248,6 @@ if st.session_state.cart:
                     pass
             
             new_rows = []
-            # Додаємо рядки послуг із коментарем у кожний рядок (або до першого — як зручніше, тут додаємо до кожного для наочності)
             for item in calculated_cart:
                 new_rows.append({
                     "№ чека": next_receipt_num,
@@ -229,7 +261,6 @@ if st.session_state.cart:
                     "Коментар": receipt_comment.strip()
                 })
             
-            # Додаємо фінальний рядок-підсумок для цього чека
             new_rows.append({
                 "№ чека": next_receipt_num,
                 "Час": now,
@@ -262,7 +293,7 @@ if st.session_state.cart:
                 with pd.ExcelWriter(history_file, engine='openpyxl') as writer:
                     df_new.to_excel(writer, sheet_name=master, index=False)
                 
-            st.success(f"🎉 Чек №{next_receipt_num} успішно збережено в Excel разом із коментарем!")
+            st.success(f"🎉 Чек №{next_receipt_num} успішно збережено в Excel!")
             st.session_state.cart.clear()
             st.rerun()
             
