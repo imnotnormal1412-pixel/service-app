@@ -47,6 +47,8 @@ def load_clients_base():
                         df["Кількість візитів"] = 1
                     else:
                         df[col] = ""
+            # Безпечно заповнюємо порожні значення в кількості візитів одиницею
+            df["Кількість візитів"] = pd.to_numeric(df["Кількість візитів"], errors='coerce').fillna(1).astype(int)
             return df
         except Exception:
             pass
@@ -160,7 +162,6 @@ with st.expander("➕ Додати нову послугу або знижку �
     
     if st.button("Додати цю позицію до чека"):
         if custom_name.strip() and custom_price > 0:
-            # Перевірка: чи вже є знижка в чеку
             already_has_discount = any(item['category'] == "Знижки" for item in st.session_state.cart)
             if custom_cat == "Знижки" and already_has_discount:
                 st.error("❌ У чеку вже є знижка! Не можна додавати більше однієї знижки до замовлення.")
@@ -193,7 +194,6 @@ if st.button("Додати до чека", type="primary"):
     if not selected_service:
         st.error("Оберіть позицію зі списку.")
     else:
-        # Перевірка: чи вже є знижка в чеку, якщо намагаються додати знижку через селектбокс
         already_has_discount = any(item['category'] == "Знижки" for item in st.session_state.cart)
         if selected_category == "Знижки" and already_has_discount:
             st.error("❌ У чеку вже є знижка! Не можна додавати більше однієї знижки до замовлення.")
@@ -245,7 +245,6 @@ if st.session_state.cart:
         })
         grand_total += item_total
 
-    # Виводимо позиції чека з кнопкою видалення кожного окремого рядка
     for i, item in enumerate(calculated_cart):
         col_item_info, col_item_del = st.columns([5, 1])
         with col_item_info:
@@ -266,7 +265,7 @@ if st.session_state.cart:
     client_status = "Звичайний"
     is_existing_client = False
     found_client_name = ""
-    client_visits_count = 0
+    client_visits_count = 1
     
     if not is_anon:
         entered_phone = st.text_input("📞 Номер телефону клієнта:", placeholder="0681234567 або 681234567")
@@ -290,7 +289,12 @@ if st.session_state.cart:
                 if not match.empty:
                     is_existing_client = True
                     found_client_name = str(match.iloc[0]["Ім'я"])
-                    client_visits_count = int(match.iloc[0]["Кількість візитів"])
+                    # Безпечне зчитування кількості візитів
+                    try:
+                        client_visits_count = int(match.iloc[0]["Кількість візитів"])
+                    except Exception:
+                        client_visits_count = 1
+                        
                     if "Статус" in match.columns:
                         client_status = str(match.iloc[0]["Статус"]).strip()
             
@@ -298,7 +302,6 @@ if st.session_state.cart:
                 st.success(f"🌟 Знайдено в базі! Клієнт: **{found_client_name}** | Статус: **{client_status}** (Візитів: {client_visits_count})")
                 client_name = found_client_name
                 
-                # Перевірка: чи вже є будь-яка знижка в чеку
                 already_has_discount = any(item['category'] == "Знижки" for item in st.session_state.cart)
                 
                 if not already_has_discount:
@@ -569,7 +572,7 @@ with st.expander("🔒 Панель хоста (Історія та аналіт
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
             
-            st.markdown("---")
+            st.markdown---()
             st.subheader("📊 Перегляд аркушів майстрів в Excel")
             
             try:
