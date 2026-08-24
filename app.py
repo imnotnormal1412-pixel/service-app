@@ -63,7 +63,7 @@ with col_user2:
 
 master_name = st.session_state.logged_in_master
 
-# --- НОВИНКА: Блок «Статистика за сьогодні» для самого майстра ---
+# Блок «Статистика за сьогодні» для майстра
 history_file = "all_sales_history.xlsx"
 today_str = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d")
 
@@ -79,17 +79,14 @@ if os.path.exists(history_file):
                 df_m["Дата"] = pd.to_datetime(df_m["Час"], errors='coerce').dt.strftime("%Y-%m-%d")
                 df_today = df_m[df_m["Дата"] == today_str]
                 if not df_today.empty:
-                    # Рахуємо унікальні чеки за сьогодні та їхню суму
                     if "№ чека" in df_today.columns:
                         today_receipts_count = df_today["№ чека"].nunique()
-                    # Беремо тільки рядки з підсумками або рахуємо по унікальних чеках, щоб не задвоювати послуги
                     df_totals_today = df_today[df_today["Категорія"] == "--- ЗАГАЛОМ ЗА ЧЕК ---"]
                     if not df_totals_today.empty:
                         today_revenue = df_totals_today["Сума (грн)"].sum()
     except Exception:
         pass
 
-# Виводимо гарні метрики для майстра
 col_stat1, col_stat2 = st.columns(2)
 with col_stat1:
     st.metric(label="📊 Ваших чеків сьогодні", value=today_receipts_count)
@@ -102,7 +99,6 @@ st.markdown("---")
 categories = ["Послуги", "Матеріали", "Інше", "Знижки"]
 selected_category = st.selectbox("Оберіть категорію:", categories)
 
-# Фільтруємо послуги за обраною категорією
 filtered_services = {name: data for name, data in st.session_state.services.items() if data["category"] == selected_category}
 service_options = list(filtered_services.keys())
 
@@ -117,7 +113,6 @@ else:
     current_price = 0.0
     st.info("У цій категорії поки немає позицій.")
 
-# Можливість змінити кількість та ціну
 qty = st.number_input("Кількість / Години", min_value=0.1, value=1.0, step=0.5)
 
 if selected_category == "Знижки":
@@ -130,7 +125,6 @@ if selected_category == "Знижки":
 else:
     price = st.number_input("Ціна за одиницю (грн)", min_value=0.0, value=current_price, step=10.0)
 
-# Додати нову послугу або знижку ТІЛЬКИ до поточного чека
 with st.expander("➕ Додати нову послугу або знижку до чека"):
     custom_name = st.text_input("Назва позиції або знижки")
     custom_cat = st.selectbox("Категорія:", categories, key="custom_cat_select")
@@ -168,7 +162,6 @@ with st.expander("➕ Додати нову послугу або знижку �
         else:
             st.error("Введіть назву та коректне значення.")
 
-# Кнопка додавання обраної зі списку послуги до чека
 if st.button("Додати до чека", type="primary"):
     if not selected_service:
         st.error("Оберіть позицію зі списку.")
@@ -192,7 +185,6 @@ if st.button("Додати до чека", type="primary"):
         })
         st.success(f"Додано до чека: {item_name_display}")
 
-# Відображення поточного чека
 st.markdown("---")
 st.subheader("🧾 Поточний чек клієнта")
 
@@ -225,77 +217,177 @@ if st.session_state.cart:
     
     st.markdown(f"### Загальна сума до сплати: {grand_total} грн")
     
-    receipt_comment = st.text_input("💬 Коментар або примітка до чека (необов'язково):", placeholder="Наприклад: клієнтка Оля, просила додатковий догляд...")
+    st.markdown("---")
+    
+    # Чекбокс на випадок анонімного клієнта
+    is_anon = st.checkbox("👤 Клієнт без номера телефону (анонім)")
+    
+    client_phone = ""
+    client_name = ""
+    is_existing_client = False
+    found_client_name = ""
+    client_visits_count = 0
+    
+    if not is_anon:
+        client_phone = st.text_input("📞 Номер телефону клієнта:", placeholder="Наприклад: 0671234567")
+        
+        # Перевіряємо в базі, чи існує такий номер
+        if client_phone.strip():
+            clients_file = "clients_base.xlsx"
+            if os.path.exists(clients_file):
+                try:
+                    df_check = pd.read_excel(clients_file)
+                    if not df_check.empty and "Телефон" in df_check.columns:
+                        df_check["Телефон"] = df_check["Телефон"].astype(str)
+                        match = df_check[df_check["Телефон"] == client_phone.strip()]
+                        if not match.empty:
+                            is_existing_client = True
+                            found_client_name = match.iloc[0]["Ім'я"]
+                            client_visits_count = int(match.iloc[0]["Кількість візитів"])
+                except Exception:
+                    pass
+            
+            # Якщо клієнт є в базі — показуємо підказку і не вимагаємо ім'я
+            if is_existing_client:
+                st.success(f"🌟 Знайдено в базі! Постійний клієнт: **{found_client_name}** (Візитів: {client_visits_count})")
+                client_name = found_client_name
+            else:
+                # Якщо номера немає в базі — ВИЛАЗИТЬ ВІКОНЕЧКО ДЛЯ ІМЕНІ!
+                st.info("💡 Номер новий для системи. Будь ласка, вкажіть ім'я клієнта нижче:")
+                client_name = st.text_input("👤 Ім'я нового клієнта:", placeholder="Наприклад: Олена")
+    
+    receipt_comment = st.text_input("💬 Коментар або примітка до чека (необов'язково):", placeholder="Особливі побажання...")
     
     col1, col2 = st.columns(2)
     with col1:
         if st.button("💾 Завершити і зберегти чек"):
-            now = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
-            master = st.session_state.logged_in_master
-            history_file = "all_sales_history.xlsx"
-            
-            next_receipt_num = 1
-            if os.path.exists(history_file):
-                try:
-                    xls = pd.ExcelFile(history_file)
-                    if master in xls.sheet_names:
-                        df_master_old = pd.read_excel(history_file, sheet_name=master)
-                        if "№ чека" in df_master_old.columns:
-                            valid_nums = df_master_old["№ чека"].dropna()
-                            if not valid_nums.empty:
-                                next_receipt_num = int(valid_nums.max()) + 1
-                except Exception:
-                    pass
-            
-            new_rows = []
-            for item in calculated_cart:
+            # Перевірки перед збереженням
+            if not is_anon and not client_phone.strip():
+                st.error("❌ Помилка: Введіть номер телефону клієнта або позначте «Анонім»!")
+            elif not is_anon and not is_existing_client and not client_name.strip():
+                st.error("❌ Помилка: Введіть ім'я нового клієнта!")
+            else:
+                now = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
+                today_date_only = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d")
+                master = st.session_state.logged_in_master
+                history_file = "all_sales_history.xlsx"
+                clients_file = "clients_base.xlsx"
+                
+                # Формуємо дані для збереження
+                if is_anon:
+                    cleaned_phone = "Анонім"
+                    cleaned_name = "Анонім"
+                else:
+                    cleaned_phone = client_phone.strip()
+                    cleaned_name = client_name.strip()
+                
+                # --- РОБОТА З БАЗОЮ КЛІЄНТІВ (якщо не анонім) ---
+                if not is_anon:
+                    if os.path.exists(clients_file):
+                        try:
+                            df_clients = pd.read_excel(clients_file)
+                        except Exception:
+                            df_clients = pd.DataFrame(columns=["Телефон", "Ім'я", "Кількість візитів", "Останній візит", "Останній майстер"])
+                    else:
+                        df_clients = pd.DataFrame(columns=["Телефон", "Ім'я", "Кількість візитів", "Останній візит", "Останній майстер"])
+                    
+                    if not df_clients.empty and "Телефон" in df_clients.columns:
+                        df_clients["Телефон"] = df_clients["Телефон"].astype(str)
+                        if cleaned_phone in df_clients["Телефон"].values:
+                            idx = df_clients[df_clients["Телефон"] == cleaned_phone].index[0]
+                            current_visits = int(df_clients.loc[idx, "Кількість візитів"])
+                            df_clients.loc[idx, "Кількість візитів"] = current_visits + 1
+                            df_clients.loc[idx, "Останній візит"] = today_date_only
+                            df_clients.loc[idx, "Останній майстер"] = master
+                            if cleaned_name and cleaned_name != "Без імені":
+                                df_clients.loc[idx, "Ім'я"] = cleaned_name
+                        else:
+                            new_client_row = pd.DataFrame([{
+                                "Телефон": cleaned_phone,
+                                "Ім'я": cleaned_name,
+                                "Кількість візитів": 1,
+                                "Останній візит": today_date_only,
+                                "Останній майстер": master
+                            }])
+                            df_clients = pd.concat([df_clients, new_client_row], ignore_index=True)
+                    else:
+                        df_clients = pd.DataFrame([{
+                            "Телефон": cleaned_phone,
+                            "Ім'я": cleaned_name,
+                            "Кількість візитів": 1,
+                            "Останній візит": today_date_only,
+                            "Останній майстер": master
+                        }])
+                    
+                    df_clients.to_excel(clients_file, index=False)
+                
+                # --- ЗБЕРЕЖЕННЯ ЧЕКА В ІСТОРІЮ МАЙСТРА ---
+                next_receipt_num = 1
+                if os.path.exists(history_file):
+                    try:
+                        xls = pd.ExcelFile(history_file)
+                        if master in xls.sheet_names:
+                            df_master_old = pd.read_excel(history_file, sheet_name=master)
+                            if "№ чека" in df_master_old.columns:
+                                valid_nums = df_master_old["№ чека"].dropna()
+                                if not valid_nums.empty:
+                                    next_receipt_num = int(valid_nums.max()) + 1
+                    except Exception:
+                        pass
+                
+                new_rows = []
+                for item in calculated_cart:
+                    new_rows.append({
+                        "№ чека": next_receipt_num,
+                        "Час": now,
+                        "Майстер": master,
+                        "Телефон клієнта": cleaned_phone,
+                        "Ім'я клієнта": cleaned_name,
+                        "Категорія": item['category'],
+                        "Послуга/Позиція": item['name'],
+                        "Кількість": item['qty'],
+                        "Ціна за од. / Значення": item['price_display'],
+                        "Сума (грн)": item['total'],
+                        "Коментар": receipt_comment.strip()
+                    })
+                
                 new_rows.append({
                     "№ чека": next_receipt_num,
                     "Час": now,
                     "Майстер": master,
-                    "Категорія": item['category'],
-                    "Послуга/Позиція": item['name'],
-                    "Кількість": item['qty'],
-                    "Ціна за од. / Значення": item['price_display'],
-                    "Сума (грн)": item['total'],
+                    "Телефон клієнта": cleaned_phone,
+                    "Ім'я клієнта": cleaned_name,
+                    "Категорія": "--- ЗАГАЛОМ ЗА ЧЕК ---",
+                    "Послуга/Позиція": f"Підсумок чека №{next_receipt_num}",
+                    "Кількість": "",
+                    "Ціна за од. / Значення": "",
+                    "Сума (грн)": grand_total,
                     "Коментар": receipt_comment.strip()
                 })
-            
-            new_rows.append({
-                "№ чека": next_receipt_num,
-                "Час": now,
-                "Майстер": master,
-                "Категорія": "--- ЗАГАЛОМ ЗА ЧЕК ---",
-                "Послуга/Позиція": f"Підсумок чека №{next_receipt_num}",
-                "Кількість": "",
-                "Ціна за од. / Значення": "",
-                "Сума (грн)": grand_total,
-                "Коментар": receipt_comment.strip()
-            })
-            
-            df_new = pd.DataFrame(new_rows)
-            
-            if os.path.exists(history_file):
-                with pd.ExcelWriter(history_file, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
-                    try:
-                        df_old_master = pd.read_excel(history_file, sheet_name=master)
-                        if "Послуга/Позиція" not in df_old_master.columns:
-                            df_combined = df_new
-                        else:
-                            empty_row = {col: None for col in df_old_master.columns}
-                            df_empty = pd.DataFrame([empty_row])
-                            df_combined = pd.concat([df_old_master, df_empty, df_new], ignore_index=True)
-                    except Exception:
-                        df_combined = df_new
-                    
-                    df_combined.to_excel(writer, sheet_name=master, index=False)
-            else:
-                with pd.ExcelWriter(history_file, engine='openpyxl') as writer:
-                    df_new.to_excel(writer, sheet_name=master, index=False)
                 
-            st.success(f"🎉 Чек №{next_receipt_num} успішно збережено в Excel!")
-            st.session_state.cart.clear()
-            st.rerun()
+                df_new = pd.DataFrame(new_rows)
+                
+                if os.path.exists(history_file):
+                    with pd.ExcelWriter(history_file, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                        try:
+                            df_old_master = pd.read_excel(history_file, sheet_name=master)
+                            if "Послуга/Позиція" not in df_old_master.columns:
+                                df_combined = df_new
+                            else:
+                                empty_row = {col: None for col in df_old_master.columns}
+                                df_empty = pd.DataFrame([empty_row])
+                                df_combined = pd.concat([df_old_master, df_empty, df_new], ignore_index=True)
+                        except Exception:
+                            df_combined = df_new
+                        
+                        df_combined.to_excel(writer, sheet_name=master, index=False)
+                else:
+                    with pd.ExcelWriter(history_file, engine='openpyxl') as writer:
+                        df_new.to_excel(writer, sheet_name=master, index=False)
+                    
+                st.success(f"🎉 Чек №{next_receipt_num} успішно збережено!")
+                st.session_state.cart.clear()
+                st.rerun()
             
     with col2:
         if st.button("🗑️ Очистити чек"):
@@ -312,11 +404,31 @@ with st.expander("🔒 Панель хоста (Історія та аналіт
     if admin_password == "1234":
         st.success("Доступ дозволено!")
         history_file = "all_sales_history.xlsx"
+        clients_file = "clients_base.xlsx"
         
-        if st.button("🗑️ Очистити всю історію (видалити файл бази)"):
+        st.subheader("👥 Клієнтська база")
+        if os.path.exists(clients_file):
+            with open(clients_file, "rb") as f:
+                client_excel_bytes = f.read()
+            st.download_button(
+                label="📥 Завантажити повну базу клієнтів (.xlsx)",
+                data=client_excel_bytes,
+                file_name="basa_klientiv.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            try:
+                df_cl_view = pd.read_excel(clients_file)
+                st.dataframe(df_cl_view, use_container_width=True)
+            except Exception:
+                pass
+        else:
+            st.info("Клієнтська база поки що пуста.")
+        
+        st.markdown("---")
+        if st.button("🗑️ Очистити всю історію чеків (файл продажів)"):
             if os.path.exists(history_file):
                 os.remove(history_file)
-                st.success("Архів успішно очищено!")
+                st.success("Архів чеків успішно очищено!")
                 st.rerun()
             else:
                 st.warning("Файл історії вже порожній.")
@@ -326,7 +438,7 @@ with st.expander("🔒 Панель хоста (Історія та аналіт
                 excel_bytes = f.read()
             
             st.download_button(
-                label="📥 Завантажити всю історію в Excel (.xlsx)",
+                label="📥 Завантажити всю історію чеків в Excel (.xlsx)",
                 data=excel_bytes,
                 file_name="istoriya_chekiv.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
