@@ -148,7 +148,7 @@ with st.expander("🔒 Панель хоста (Історія всіх чекі
                 file_name="istoriya_chekiv.xls",
                 mime="text/plain"
             )
-            st.xls(history_data)
+            st.text(history_data)
         else:
             st.info("Архів чеків поки що порожній.")
     elif admin_password != "":
