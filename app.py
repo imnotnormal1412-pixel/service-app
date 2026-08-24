@@ -160,27 +160,32 @@ with st.expander("➕ Додати нову послугу або знижку �
     
     if st.button("Додати цю позицію до чека"):
         if custom_name.strip() and custom_price > 0:
-            if custom_cat == "Знижки":
-                if custom_is_pct:
-                    item_price = -custom_price
-                    item_name_display = f"{custom_name.strip()} ({custom_price}%)"
-                else:
-                    item_price = -custom_price
-                    item_name_display = custom_name.strip()
+            # Перевірка: чи вже є знижка в чеку
+            already_has_discount = any(item['category'] == "Знижки" for item in st.session_state.cart)
+            if custom_cat == "Знижки" and already_has_discount:
+                st.error("❌ У чеку вже є знижка! Не можна додавати більше однієї знижки до замовлення.")
             else:
-                item_price = custom_price
-                item_name_display = custom_name.strip()
-            
-            st.session_state.cart.append({
-                "name": item_name_display, 
-                "category": custom_cat,
-                "price": item_price, 
-                "qty": 1.0, 
-                "total": item_price,
-                "is_pct": custom_is_pct if custom_cat == "Знижки" else False
-            })
-            st.success(f"Успішно додано до поточного чека: {item_name_display}!")
-            st.rerun()
+                if custom_cat == "Знижки":
+                    if custom_is_pct:
+                        item_price = -custom_price
+                        item_name_display = f"{custom_name.strip()} ({custom_price}%)"
+                    else:
+                        item_price = -custom_price
+                        item_name_display = custom_name.strip()
+                else:
+                    item_price = custom_price
+                    item_name_display = custom_name.strip()
+                
+                st.session_state.cart.append({
+                    "name": item_name_display, 
+                    "category": custom_cat,
+                    "price": item_price, 
+                    "qty": 1.0, 
+                    "total": item_price,
+                    "is_pct": custom_is_pct if custom_cat == "Знижки" else False
+                })
+                st.success(f"Успішно додано до поточного чека: {item_name_display}!")
+                st.rerun()
         else:
             st.error("Введіть назву та коректне значення.")
 
@@ -188,24 +193,30 @@ if st.button("Додати до чека", type="primary"):
     if not selected_service:
         st.error("Оберіть позицію зі списку.")
     else:
-        if selected_category == "Знижки" and is_percentage_service:
-            item_price = -price
-            item_name_display = f"{selected_service} ({price}%)"
-            total = -price
+        # Перевірка: чи вже є знижка в чеку, якщо намагаються додати знижку через селектбокс
+        already_has_discount = any(item['category'] == "Знижки" for item in st.session_state.cart)
+        if selected_category == "Знижки" and already_has_discount:
+            st.error("❌ У чеку вже є знижка! Не можна додавати більше однієї знижки до замовлення.")
         else:
-            item_price = -price if selected_category == "Знижки" else price
-            item_name_display = selected_service
-            total = qty * item_price
-        
-        st.session_state.cart.append({
-            "name": item_name_display, 
-            "category": selected_category,
-            "price": item_price, 
-            "qty": qty, 
-            "total": total,
-            "is_pct": (selected_category == "Знижки" and is_percentage_service)
-        })
-        st.success(f"Додано до чека: {item_name_display}")
+            if selected_category == "Знижки" and is_percentage_service:
+                item_price = -price
+                item_name_display = f"{selected_service} ({price}%)"
+                total = -price
+            else:
+                item_price = -price if selected_category == "Знижки" else price
+                item_name_display = selected_service
+                total = qty * item_price
+            
+            st.session_state.cart.append({
+                "name": item_name_display, 
+                "category": selected_category,
+                "price": item_price, 
+                "qty": qty, 
+                "total": total,
+                "is_pct": (selected_category == "Знижки" and is_percentage_service)
+            })
+            st.success(f"Додано до чека: {item_name_display}")
+            st.rerun()
 
 st.markdown("---")
 st.subheader("🧾 Поточний чек клієнта")
@@ -234,8 +245,15 @@ if st.session_state.cart:
         })
         grand_total += item_total
 
+    # Виводимо позиції чека з кнопкою видалення кожного окремого рядка
     for i, item in enumerate(calculated_cart):
-        st.write(f"**{i+1}. [{item['category']}] {item['name']}** — {item['qty']} од. x {item['price_display']} = **{item['total']} грн**")
+        col_item_info, col_item_del = st.columns([5, 1])
+        with col_item_info:
+            st.write(f"**{i+1}. [{item['category']}] {item['name']}** — {item['qty']} од. x {item['price_display']} = **{item['total']} грн**")
+        with col_item_del:
+            if st.button("❌", key=f"del_item_{i}", help="Видалити цю позицію"):
+                st.session_state.cart.pop(i)
+                st.rerun()
     
     st.markdown(f"### Загальна сума до сплати: {grand_total} грн")
     
@@ -280,7 +298,8 @@ if st.session_state.cart:
                 st.success(f"🌟 Знайдено в базі! Клієнт: **{found_client_name}** | Статус: **{client_status}** (Візитів: {client_visits_count})")
                 client_name = found_client_name
                 
-                already_has_discount = any("знижка" in str(item["name"]).lower() for item in st.session_state.cart)
+                # Перевірка: чи вже є будь-яка знижка в чеку
+                already_has_discount = any(item['category'] == "Знижки" for item in st.session_state.cart)
                 
                 if not already_has_discount:
                     status_lower = client_status.lower()
@@ -480,7 +499,7 @@ if st.session_state.cart:
                 st.rerun()
             
     with col2:
-        if st.button("🗑️ Очистити чек"):
+        if st.button("🗑️ Очистити весь чек"):
             st.session_state.cart.clear()
             st.rerun()
 else:
