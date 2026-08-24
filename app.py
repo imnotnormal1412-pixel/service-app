@@ -43,7 +43,7 @@ if 'logged_in_master' not in st.session_state:
 if not st.session_state.logged_in_master:
     st.warning("👋 Будь ласка, представтеся перед початком роботи.")
     with st.form("login_form"):
-        entered_name = st.text_input("Введіть ваше ім'я (наприклад, Тато або Олена):")
+        entered_name = st.text_input("Введіть ваше ім'я")
         submit_login = st.form_submit_button("Увійти в систему", type="primary")
         
         if submit_login:
