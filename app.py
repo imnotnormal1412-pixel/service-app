@@ -59,7 +59,7 @@ if not st.session_state.logged_in_master:
 # Якщо вхід виконано, виводимо привітання і кнопку виходу збоку
 col_user1, col_user2 = st.columns([3, 1])
 with col_user1:
-    st.success( Працює майстер: **{st.session_state.logged_in_master}** )
+    st.success( Працює майстер: **{st.session_state.logged_in_master}** ),
 with col_user2:
     if st.button("Змінити майстра"):
         st.session_state.logged_in_master = ""
