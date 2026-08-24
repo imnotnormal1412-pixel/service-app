@@ -130,7 +130,6 @@ if st.session_state.cart:
             now = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
             master = st.session_state.logged_in_master
             
-            # Збираємо всі послуги цього чека в один охайний рядок для Excel
             items_desc_list = []
             for item in st.session_state.cart:
                 items_desc_list.append(f"{item['name']} ({item['qty']} од. x {item['price']} грн)")
@@ -147,10 +146,15 @@ if st.session_state.cart:
             excel_file = "all_sales_history.xlsx"
             
             if os.path.exists(excel_file):
-                df_old = pd.read_excel(excel_file)
-                df_new = pd.DataFrame([new_row])
-                df_combined = pd.concat([df_old, df_new], ignore_index=True)
-                df_combined.to_excel(excel_file, index=False)
+                try:
+                    df_old = pd.read_excel(excel_file)
+                    df_new = pd.DataFrame([new_row])
+                    df_combined = pd.concat([df_old, df_new], ignore_index=True)
+                    df_combined.to_excel(excel_file, index=False)
+                except Exception:
+                    # Якщо структура старого файлу відрізняється, створюємо заново новий чистий файл
+                    df_new = pd.DataFrame([new_row])
+                    df_new.to_excel(excel_file, index=False)
             else:
                 df_new = pd.DataFrame([new_row])
                 df_new.to_excel(excel_file, index=False)
@@ -189,16 +193,19 @@ with st.expander("🔒 Панель хоста (Історія всіх чекі
             st.markdown("---")
             st.subheader("📋 Останні чеки:")
             
-            df = pd.read_excel(history_file)
-            
-            if not df.empty:
-                # Виводимо чеки у зворотньому порядку (нові зверху)
-                for index, row in df.iloc[::-1].iterrows():
-                    with st.container(border=True):
-                        st.markdown(f"🕒 **Час:** {row['Час']} &nbsp;&nbsp;|&nbsp;&nbsp; 👤 **Майстер:** {row['Майстер']}")
-                        st.markdown("---")
-                       st.write(f"**Склад замовлення:** {row['Склад чека (Послуги/Матеріали)']}")
-                        st.markdown(f"**Загальна сума чека: {row['Загальна сума чека (грн)']} грн**")
+            try:
+                df = pd.read_excel(history_file)
+                if not df.empty and 'Склад чека (Послуги/Матеріали)' in df.columns:
+                    for index, row in df.iloc[::-1].iterrows():
+                        with st.container(border=True):
+                            st.markdown(f"🕒 **Час:** {row['Час']} &nbsp;&nbsp;|&nbsp;&nbsp; 👤 **Майстер:** {row['Майстер']}")
+                            st.markdown("---")
+                            st.write(f"**Склад замовлення:** {row['Склад чека (Послуги/Матеріали)]}")
+                            st.markdown(f"**Загальна сума чека: {row['Загальна сума чека (грн)']} грн**")
+                else:
+                    st.info("Формат файлу історії оновлюється. Зробіть новий чек.")
+            except Exception:
+                st.info("Архів чеків оновлено. Зробіть перший новий чек.")
         else:
             st.info("Архів чеків поки що порожній.")
             
