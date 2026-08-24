@@ -192,16 +192,17 @@ if st.session_state.cart:
 else:
     st.info("Поки що порожній чек.")
 
-# --- ЗАХИЩЕНА ПАНЕЛЬ ХОСТА ---
+# --- ЗАХИЩЕНА ПАНЕЛЬ ХОСТА (Пункт 5: розділення по майстрах та сума) ---
 st.markdown("---")
-with st.expander("🔒 Панель хоста (Історія всіх чеків)"):
-    admin_password = st.text_input("Введіть пароль адміністратора:", type="password")
+with st.expander("🔒 Панель хоста (Історія та аналітика за майстрами)"):
+    admin_password = st.text_input("Введіть пароль адміністратора:", type="password", key="admin_pass_input")
     
     if admin_password == "1234":
         st.success("Доступ дозволено!")
         history_file = "all_sales_history.xlsx"
         
-        if st.button("🗑️ Очистити всю історію (видалити файл бази)"):
+        # Кнопка очищення історії
+        if st.button("🗑️ Очистити всю історію (видалити файл бази)", key="clear_history_btn"):
             if os.path.exists(history_file):
                 os.remove(history_file)
                 st.success("Архів успішно очищено!")
@@ -221,13 +222,48 @@ with st.expander("🔒 Панель хоста (Історія всіх чекі
             )
             
             st.markdown("---")
-            st.subheader("📋 Всі записи в базі:")
+            st.subheader("📊 Фільтрація та аналітика за майстрами")
             
             try:
                 df = pd.read_excel(history_file)
-                st.dataframe(df)
-            except Exception:
-                st.info("Архів чеків оновлюється.")
+                if not df.empty and "Майстер" in df.columns:
+                    # Отримуємо список унікальних майстрів
+                    unique_masters = df["Майстер"].dropna().unique().tolist()
+                    selected_master_filter = st.selectbox("👤 Оберіть майстра:", ["Усі майстри"] + unique_masters)
+                    
+                    # Фільтруємо за майстром
+                    if selected_master_filter != "Усі майстри":
+                        df_filtered = df[df["Майстер"] == selected_master_filter]
+                    else:
+                        df_filtered = df
+                    
+                    # Додаємо фільтрацію за конкретною датою (щоб зручно бачити суму за день)
+                    if "Час" in df_filtered.columns:
+                        # Витягуємо дати з колонки часу (формат "РРРР-ММ-ДД")
+                        df_filtered["Дата"] = pd.to_datetime(df_filtered["Час"]).dt.strftime("%Y-%m-%d")
+                        available_dates = df_filtered["Дата"].dropna().unique().tolist()
+                        available_dates.sort(reverse=True) # Новіші дати зверху
+                        
+                        selected_date_filter = st.selectbox("📅 Оберіть дату:", ["Усі дати"] + available_dates)
+                        
+                        if selected_date_filter != "Усі дати":
+                            df_filtered = df_filtered[df_filtered["Дата"] == selected_date_filter]
+                        
+                        # Прибираємо тимчасову колонку дати перед виведенням, щоб не заважала
+                        df_filtered = df_filtered.drop(columns=["Дата"])
+                    
+                    # Рахуємо загальну суму по відфільтрованих записах (унікальні чеки або сума рядків)
+                    if "Сума (грн)" in df_filtered.columns:
+                        total_revenue = df_filtered["Сума (грн)"].sum()
+                        label_text = f"💰 Загальна сума (Майстер: {selected_master_filter})"
+                        st.metric(label=label_text, value=f"{total_revenue} грн")
+                    
+                    # Виводимо саму таблицю з чеками обраного майстра
+                    st.dataframe(df_filtered, use_container_width=True)
+                else:
+                    st.info("Архів порожній або оновлюється.")
+            except Exception as e:
+                st.info(f"Архів чеків оновлюється або має стару структуру. (Помилка: {e})")
         else:
             st.info("Архів чеків поки що порожній.")
             
