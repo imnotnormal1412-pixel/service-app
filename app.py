@@ -3,10 +3,10 @@ from datetime import datetime, timedelta
 import os
 import pandas as pd
 
-# Список дозволених майстрів (White List) - Пункт 4
+# Список дозволених майстрів (White List)
 ALLOWED_MASTERS = ["Микола", "Олена", "Тато", "Адмін"]
 
-# База послуг із категоріями та цінами за замовчуванням
+# База послуг із категоріями та цінами (для знижок у відсотках вказуємо значення зі знаком "%" або суму в грн)
 if 'services' not in st.session_state:
     st.session_state.services = {
         "Установка люстри": {"category": "Послуги", "price": 520},
@@ -21,11 +21,11 @@ if 'services' not in st.session_state:
         "Лампа світлодіодна (склад)": {"category": "Матеріали", "price": 150},
         "Лампа світлодіодна (магазин)": {"category": "Матеріали", "price": 350},
         "Виїзд майстра": {"category": "Інше", "price": 500},
-        "Знижка постійному клієнту": {"category": "Знижки", "price": 100},
-        "Акція вихідного дня": {"category": "Знижки", "price": 120},
         "Знижка пенсіонер": {"category": "Знижки", "price": 200},
         "Знижка військовий": {"category": "Знижки", "price": 250},
-        "Знижка ВПО": {"category": "Знижки", "price": 250},
+        "Знижка постійному клієнту": {"category": "Знижки", "price": 50, "is_percent": False},
+        "Знижка ВПО": {"category": "Знижки", "price": 15, "is_percent": True},  # Автоматично у відсотках!
+        "Акція вихідного дня": {"category": "Знижки", "price": 100, "is_percent": False} # Автоматично у гривнях!
     }
 
 if 'cart' not in st.session_state:
@@ -34,7 +34,7 @@ if 'cart' not in st.session_state:
 st.title("✂️ Система розрахунку послуг")
 st.markdown("Робоче місце для оформлення замовлень")
 
-# Авторизація через Білий список (Пункт 4)
+# Авторизація через Білий список
 if 'logged_in_master' not in st.session_state:
     st.session_state.logged_in_master = ""
 
@@ -72,9 +72,12 @@ selected_category = st.selectbox("Оберіть категорію:", categorie
 filtered_services = {name: data for name, data in st.session_state.services.items() if data["category"] == selected_category}
 service_options = list(filtered_services.keys())
 
+is_percentage_service = False
 if service_options:
     selected_service = st.selectbox("Оберіть послугу зі списку", service_options)
-    current_price = float(filtered_services[selected_service]["price"])
+    service_data = filtered_services[selected_service]
+    current_price = float(service_data["price"])
+    is_percentage_service = service_data.get("is_percent", False)
 else:
     selected_service = None
     current_price = 0.0
@@ -83,19 +86,18 @@ else:
 # Можливість змінити кількість та ціну
 qty = st.number_input("Кількість / Години", min_value=0.1, value=1.0, step=0.5)
 
-# ПУНКТ 6: Тип знижки (гривні чи відсотки)
-is_percentage_discount = False
+# Якщо це знижка, програма сама підказує, що це — відсотки чи гривні з бази
 if selected_category == "Знижки":
-    discount_type = st.radio("Тип знижки:", ["Фіксована сума (грн)", "Відсоток від суми чека (%)"], horizontal=True)
-    if discount_type == "Відсоток від суми чека (%)":
-        is_percentage_discount = True
-        price = st.number_input("Знижка у відсотках (%)", min_value=0.0, max_value=100.0, value=10.0, step=1.0)
+    if is_percentage_service:
+        st.info(f"💡 Ця знижка за замовчуванням у **відсотках (%)** згідно з базою.")
+        price = st.number_input("Знижка у відсотках (%)", min_value=0.0, max_value=100.0, value=current_price, step=1.0)
     else:
+        st.info(f"💡 Ця знижка за замовчуванням у **гривнях (грн)** згідно з базою.")
         price = st.number_input("Сума знижки (грн)", min_value=0.0, value=current_price, step=10.0)
 else:
     price = st.number_input("Ціна за одиницю (грн)", min_value=0.0, value=current_price, step=10.0)
 
-# Додати нову послугу або знижку ТІЛЬКИ до поточного чека (Пункт 3)
+# Додати нову послугу або знижку ТІЛЬКИ до поточного чека
 with st.expander("➕ Додати нову послугу або знижку до чека"):
     custom_name = st.text_input("Назва позиції або знижки")
     custom_cat = st.selectbox("Категорія:", categories, key="custom_cat_select")
@@ -138,7 +140,7 @@ if st.button("Додати до чека", type="primary"):
     if not selected_service:
         st.error("Оберіть позицію зі списку.")
     else:
-        if selected_category == "Знижки" and is_percentage_discount:
+        if selected_category == "Знижки" and is_percentage_service:
             item_price = -price
             item_name_display = f"{selected_service} ({price}%)"
             total = -price
@@ -153,7 +155,7 @@ if st.button("Додати до чека", type="primary"):
             "price": item_price, 
             "qty": qty, 
             "total": total,
-            "is_pct": is_percentage_discount if selected_category == "Знижки" else False
+            "is_pct": (selected_category == "Знижки" and is_percentage_service)
         })
         st.success(f"Додано до чека: {item_name_display}")
 
@@ -197,7 +199,6 @@ if st.session_state.cart:
             master = st.session_state.logged_in_master
             history_file = "all_sales_history.xlsx"
             
-            # Визначаємо номер чека для майстра на його сторінці
             next_receipt_num = 1
             if os.path.exists(history_file):
                 try:
@@ -226,7 +227,6 @@ if st.session_state.cart:
             
             df_new = pd.DataFrame(new_rows)
             
-            # Зберігаємо на окрему сторінку (аркуш) майстра в Excel
             if os.path.exists(history_file):
                 with pd.ExcelWriter(history_file, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
                     try:
@@ -256,7 +256,7 @@ if st.session_state.cart:
 else:
     st.info("Поки що порожній чек.")
 
-# --- ЗАХИЩЕНА ПАНЕЛЬ ХОСТА (Пункт 5: перегляд по сторінках-майстрах та сума) ---
+# --- ЗАХИЩЕНА ПАНЕЛЬ ХОСТА ---
 st.markdown("---")
 with st.expander("🔒 Панель хоста (Історія та аналітика за майстрами)"):
     admin_password = st.text_input("Введіть пароль адміністратора:", type="password")
@@ -296,7 +296,6 @@ with st.expander("🔒 Панель хоста (Історія та аналіт
                 if selected_sheet:
                     df_sheet = pd.read_excel(history_file, sheet_name=selected_sheet)
                     
-                    # Фільтрація за датою для зручності
                     if "Час" in df_sheet.columns and not df_sheet.empty:
                         df_sheet["Дата"] = pd.to_datetime(df_sheet["Час"]).dt.strftime("%Y-%m-%d")
                         available_dates = df_sheet["Дата"].dropna().unique().tolist()
@@ -307,7 +306,6 @@ with st.expander("🔒 Панель хоста (Історія та аналіт
                             df_sheet = df_sheet[df_sheet["Дата"] == selected_date]
                         df_sheet = df_sheet.drop(columns=["Дата"])
                     
-                    # Підрахунок загальної суми
                     if "Сума (грн)" in df_sheet.columns:
                         total_rev = df_sheet["Сума (грн)"].sum()
                         st.metric(label=f"💰 Загальна сума (Майстер: {selected_sheet})", value=f"{total_rev} грн")
