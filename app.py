@@ -228,24 +228,36 @@ if st.session_state.cart:
     client_visits_count = 0
     
     if not is_anon:
-        client_phone = st.text_input("📞 Номер телефону клієнта:", placeholder="Наприклад: 0671234567")
+        # Автоматично підказуємо префікс +380
+        col_p1, col_p2 = st.columns([1, 4])
+        with col_p1:
+            st.text_input("Код", value="+380", disabled=True)
+        with col_p2:
+            entered_digits = st.text_input("📞 Номер телефону (без 380):", placeholder="681234567")
         
-        if client_phone.strip():
+        # Об'єднуємо код і те, що ввів майстер
+        if entered_digits.strip():
+            # Очищуємо цифри і формуємо повний номер із 380 на початку
+            clean_digits = "".join(filter(str.isdigit, entered_digits.strip()))
+            client_phone = f"380{clean_digits}"
+            
             clients_file = "clients_base.xlsx"
+            df_check = pd.DataFrame(columns=["Телефон", "Ім'я", "Кількість візитів", "Останній візит", "Останній майстер"])
+            
             if os.path.exists(clients_file):
                 try:
                     df_check = pd.read_excel(clients_file)
-                    if not df_check.empty and "Телефон" in df_check.columns:
-                        df_check["Телефон"] = df_check["Телефон"].astype(str)
-                        cleaned_input_phone = client_phone.strip()
-                        
-                        match = df_check[df_check["Телефон"] == cleaned_input_phone]
-                        if not match.empty:
-                            is_existing_client = True
-                            found_client_name = str(match.iloc[0]["Ім'я"])
-                            client_visits_count = int(match.iloc[0]["Кількість візитів"])
                 except Exception:
                     pass
+            
+            if not df_check.empty and "Телефон" in df_check.columns:
+                df_check["ЧистийТелефон"] = df_check["Телефон"].astype(str).apply(lambda x: "".join(filter(str.isdigit, x)))
+                
+                match = df_check[df_check["ЧистийТелефон"] == client_phone]
+                if not match.empty:
+                    is_existing_client = True
+                    found_client_name = str(match.iloc[0]["Ім'я"])
+                    client_visits_count = int(match.iloc[0]["Кількість візитів"])
             
             if is_existing_client:
                 st.success(f"🌟 Знайдено в базі! Постійний клієнт: **{found_client_name}** (Візитів у базі: {client_visits_count})")
@@ -259,7 +271,7 @@ if st.session_state.cart:
     col1, col2 = st.columns(2)
     with col1:
         if st.button("💾 Завершити і зберегти чек"):
-            if not is_anon and not client_phone.strip():
+            if not is_anon and not entered_digits.strip():
                 st.error("❌ Помилка: Введіть номер телефону клієнта або позначте «Анонім»!")
             elif not is_anon and not is_existing_client and not client_name.strip():
                 st.error("❌ Помилка: Введіть ім'я нового клієнта!")
@@ -274,7 +286,8 @@ if st.session_state.cart:
                     cleaned_phone = "Анонім"
                     cleaned_name = "Анонім"
                 else:
-                    cleaned_phone = client_phone.strip()
+                    # Зберігаємо у вигляді тексту з апострофом перед 380, щоб Excel не перетворив на число без нуля
+                    cleaned_phone = f"'{client_phone}"
                     cleaned_name = client_name.strip() if client_name.strip() else found_client_name
                 
                 # --- ОНОВЛЕННЯ / ЗБЕРЕЖЕННЯ БАЗИ КЛІЄНТІВ ---
@@ -288,9 +301,10 @@ if st.session_state.cart:
                         df_clients = pd.DataFrame(columns=["Телефон", "Ім'я", "Кількість візитів", "Останній візит", "Останній майстер"])
                     
                     if not df_clients.empty and "Телефон" in df_clients.columns:
-                        df_clients["Телефон"] = df_clients["Телефон"].astype(str)
-                        if cleaned_phone in df_clients["Телефон"].values:
-                            idx = df_clients[df_clients["Телефон"] == cleaned_phone].index[0]
+                        df_clients["ЧистийТелефон"] = df_clients["Телефон"].astype(str).apply(lambda x: "".join(filter(str.isdigit, x)))
+                        
+                        if client_phone in df_clients["ЧистийТелефон"].values:
+                            idx = df_clients[df_clients["ЧистийТелефон"] == client_phone].index[0]
                             current_visits = int(df_clients.loc[idx, "Кількість візитів"])
                             df_clients.loc[idx, "Кількість візитів"] = current_visits + 1
                             df_clients.loc[idx, "Останній візит"] = today_date_only
@@ -315,6 +329,9 @@ if st.session_state.cart:
                             "Останній майстер": master
                         }])
                     
+                    if "ЧистийТелефон" in df_clients.columns:
+                        df_clients = df_clients.drop(columns=["ЧистийТелефон"])
+                        
                     df_clients.to_excel(clients_file, index=False)
                 
                 # --- ЗБЕРЕЖЕННЯ ЧЕКА В ІСТОРІЮ МАЙСТРА ---
@@ -430,7 +447,7 @@ with st.expander("🔒 Панель хоста (Історія та аналіт
                 st.warning("Файл історії вже порожній.")
         
         if os.path.exists(history_file):
-            with open(history_file, "rb") as f:
+            with open(history_file, "rb`) as f:
                 excel_bytes = f.read()
             
             st.download_button(
