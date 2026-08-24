@@ -34,7 +34,7 @@ if 'cart' not in st.session_state:
 # Допоміжна функція для безпечного завантаження бази клієнтів із новими колонками
 def load_clients_base():
     clients_file = "clients_base.xlsx"
-    expected_columns = ["Телефон", "Ім'я", "Кількість візитів", "Статус", "Коментар клієнта", "Внутрішня примітка", "Останній візит", "Останній майстер"]
+    expected_columns = ["Телефон", "Ім'я", "Кількість візитів", "Статус", "Коментар майстра", "Внутрішня примітка", "Останній візит", "Останній майстер"]
     
     if os.path.exists(clients_file):
         try:
@@ -68,7 +68,7 @@ if not st.session_state.logged_in_master:
         submit_login = st.form_submit_button("Увійти в систему", type="primary")
         
         if submit_login:
-            clean_name = entered_name.strip()
+            clean_name = entered_name.strip()ко
             if any(clean_name.lower() == m.lower() for m in ALLOWED_MASTERS):
                 st.session_state.logged_in_master = clean_name
                 st.rerun()
