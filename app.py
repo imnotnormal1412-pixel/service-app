@@ -145,8 +145,8 @@ with st.expander("🔒 Панель хоста (Історія всіх чекі
             st.download_button(
                 label="📥 Завантажити повну історію чеків файлом",
                 data=history_data,
-                file_name="istoriya_chekiv.xls",
-                mime="text/plain"
+                file_name="istoriya_chekiv.xlsx",
+                mime="xlsx/plain"
             )
             st.text(history_data)
         else:
