@@ -191,6 +191,9 @@ if st.session_state.cart:
     
     st.markdown(f"### Загальна сума до сплати: {grand_total} грн")
     
+    # ПОКРАЩЕННЯ: Поле для коментаря до чека
+    receipt_comment = st.text_input("💬 Коментар або примітка до чека (необов'язково):", placeholder="Наприклад: клієнтка Оля, просила додатковий догляд...")
+    
     col1, col2 = st.columns(2)
     with col1:
         if st.button("💾 Завершити і зберегти чек"):
@@ -212,7 +215,7 @@ if st.session_state.cart:
                     pass
             
             new_rows = []
-            # Додаємо звичайні рядки послуг
+            # Додаємо рядки послуг із коментарем у кожний рядок (або до першого — як зручніше, тут додаємо до кожного для наочності)
             for item in calculated_cart:
                 new_rows.append({
                     "№ чека": next_receipt_num,
@@ -222,10 +225,11 @@ if st.session_state.cart:
                     "Послуга/Позиція": item['name'],
                     "Кількість": item['qty'],
                     "Ціна за од. / Значення": item['price_display'],
-                    "Сума (грн)": item['total']
+                    "Сума (грн)": item['total'],
+                    "Коментар": receipt_comment.strip()
                 })
             
-            # Додаємо фінальний рядок-підсумок для цього чека в Excel!
+            # Додаємо фінальний рядок-підсумок для цього чека
             new_rows.append({
                 "№ чека": next_receipt_num,
                 "Час": now,
@@ -234,7 +238,8 @@ if st.session_state.cart:
                 "Послуга/Позиція": f"Підсумок чека №{next_receipt_num}",
                 "Кількість": "",
                 "Ціна за од. / Значення": "",
-                "Сума (грн)": grand_total
+                "Сума (грн)": grand_total,
+                "Коментар": receipt_comment.strip()
             })
             
             df_new = pd.DataFrame(new_rows)
@@ -257,7 +262,7 @@ if st.session_state.cart:
                 with pd.ExcelWriter(history_file, engine='openpyxl') as writer:
                     df_new.to_excel(writer, sheet_name=master, index=False)
                 
-            st.success(f"🎉 Чек №{next_receipt_num} успішно збережено в Excel (із підсумком на суму {grand_total} грн)!")
+            st.success(f"🎉 Чек №{next_receipt_num} успішно збережено в Excel разом із коментарем!")
             st.session_state.cart.clear()
             st.rerun()
             
