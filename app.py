@@ -31,6 +31,30 @@ if 'services' not in st.session_state:
 if 'cart' not in st.session_state:
     st.session_state.cart = []
 
+# Допоміжна функція для безпечного завантаження/створення бази клієнтів із колоночкою «Статус»
+def load_clients_base():
+    clients_file = "clients_base.xlsx"
+    expected_columns = ["Телефон", "Ім'я", "Кількість візитів", "Статус", "Останній візит", "Останній майстер"]
+    
+    if os.path.exists(clients_file):
+        try:
+            df = pd.read_excel(clients_file)
+            # Перевіряємо, чи є всі колонки, якщо чогось немає — додаємо
+            for col in expected_columns:
+                if col not in df.columns:
+                    if col == "Статус":
+                        df["Статус"] = "Звичайний"
+                    elif col == "Кількість візитів":
+                        df["Кількість візитів"] = 1
+                    else:
+                        df[col] = ""
+            return df
+        except Exception:
+            pass
+    
+    # Якщо файлу немає або він пошкоджений — створюємо новий базовий
+    return pd.DataFrame(columns=expected_columns)
+
 st.title("✂️ Система розрахунку послуг")
 st.markdown("Робоче місце для оформлення замовлень")
 
@@ -239,14 +263,7 @@ if st.session_state.cart:
             clean_digits = "".join(filter(str.isdigit, entered_digits.strip()))
             client_phone = f"380{clean_digits}"
             
-            clients_file = "clients_base.xlsx"
-            df_check = pd.DataFrame(columns=["Телефон", "Ім'я", "Кількість візитів", "Статус", "Останній візит", "Останній майстер"])
-            
-            if os.path.exists(clients_file):
-                try:
-                    df_check = pd.read_excel(clients_file)
-                except Exception:
-                    pass
+            df_check = load_clients_base()
             
             if not df_check.empty and "Телефон" in df_check.columns:
                 df_check["ЧистийТелефон"] = df_check["Телефон"].astype(str).apply(lambda x: "".join(filter(str.isdigit, x)))
@@ -267,7 +284,7 @@ if st.session_state.cart:
                 already_has_discount = any("знижка" in str(item["name"]).lower() for item in st.session_state.cart)
                 
                 if not already_has_discount:
-                    # Якщо пенсіонер — пропонуємо пенсійну знижку (вона вигідніша)
+                    # Якщо пенсіонер — пропонуємо пенсійну знижку
                     if client_status.lower() == "пенсіонер":
                         if st.button("👵 Застосувати пенсійну знижку (-100 грн)"):
                             disc_data = st.session_state.services.get("знижка пенсійна", {"price": 100, "is_percent": False})
@@ -284,7 +301,7 @@ if st.session_state.cart:
                             st.success("✨ Пенсійну знижку успішно застосовано!")
                             st.rerun()
                     
-                    # Якщо постійний клієнт (візитів >= 2 або статус постійний)
+                    # Якщо постійний клієнт
                     elif client_visits_count >= 2 or client_status.lower() == "постійний":
                         if st.button("🎁 Застосувати знижку постійному клієнту (-50 грн)"):
                             disc_data = st.session_state.services.get("знижка постійному клієнту", {"price": 50, "is_percent": False})
@@ -325,21 +342,13 @@ if st.session_state.cart:
                 if is_anon:
                     cleaned_phone = "Анонім"
                     cleaned_name = "Анонім"
-                    cleaned_status = "Анонім"
                 else:
                     cleaned_phone = f"'{client_phone}"
                     cleaned_name = client_name.strip() if client_name.strip() else found_client_name
-                    cleaned_status = client_status
                 
                 # --- ОНОВЛЕННЯ / ЗБЕРЕЖЕННЯ БАЗИ КЛІЄНТІВ ---
                 if not is_anon:
-                    if os.path.exists(clients_file):
-                        try:
-                            df_clients = pd.read_excel(clients_file)
-                        except Exception:
-                            df_clients = pd.DataFrame(columns=["Телефон", "Ім'я", "Кількість візитів", "Статус", "Останній візит", "Останній майстер"])
-                    else:
-                        df_clients = pd.DataFrame(columns=["Телефон", "Ім'я", "Кількість візитів", "Статус", "Останній візит", "Останній майстер"])
+                    df_clients = load_clients_base()
                     
                     if not df_clients.empty and "Телефон" in df_clients.columns:
                         df_clients["ЧистийТелефон"] = df_clients["Телефон"].astype(str).apply(lambda x: "".join(filter(str.isdigit, x)))
@@ -352,9 +361,8 @@ if st.session_state.cart:
                             df_clients.loc[idx, "Останній майстер"] = master
                             if cleaned_name and cleaned_name != "Без імені":
                                 df_clients.loc[idx, "Ім'я"] = cleaned_name
-                            # Зберігаємо статус, якщо він був заданий або змінений
-                            if "Статус" not in df_clients.columns:
-                                df_clients["Статус"] = "Звичайний"
+                            if "Статус" not in df_clients.columns or pd.isna(df_clients.loc[idx, "Статус"]):
+                                df_clients.loc[idx, "Статус"] = "Звичайний"
                         else:
                             new_client_row = pd.DataFrame([{
                                 "Телефон": cleaned_phone,
@@ -466,6 +474,14 @@ with st.expander("🔒 Панель хоста (Історія та аналіт
         clients_file = "clients_base.xlsx"
         
         st.subheader("👥 Клієнтська база")
+        
+        # Кнопка для оновлення файлу бази клієнтів із новими колонками якщо треба
+        if st.button("🔄 Оновити структуру бази клієнтів (додати колонку Статус)"):
+            df_fix = load_clients_base()
+            df_fix.to_excel(clients_file, index=False)
+            st.success("Структуру бази успішно оновлено!")
+            st.rerun()
+            
         if os.path.exists(clients_file):
             with open(clients_file, "rb") as f:
                 client_excel_bytes = f.read()
