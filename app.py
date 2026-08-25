@@ -226,7 +226,7 @@ if master_name.lower() == "склад":
                     
                     st.dataframe(mat_rating, use_container_width=True)
                 else:
-                _   st.info("Поки немає даних про списання матеріалів в чеках.")
+                    st.info("Поки немає даних про списання матеріалів в чеках.")
         except Exception as e:
             st.info(f"Помилка формування рейтингу матеріалів: {e}")
     else:
