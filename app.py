@@ -7,8 +7,14 @@ import pandas as pd
 # 1. НАЛАШТУВАННЯ ТА СПИСКИ (МАЙСТРИ, ПОСЛУГИ, ЦІНИ, ЗНИЖКИ)
 # =========================================================================
 
+# СПИСОК ДОЗВОЛЕНИХ МАЙСТРІВ (WHITE LIST)
+# -------------------------------------------------------------------------
+# Сюди можна додати спеціальні слова для входу в панель хоста (наприклад, "Адмін", "Хост")
 ALLOWED_MASTERS = ["Микола", "Олена", "Тато", "Адмін", "Хост"]
 
+
+# БАЗА ПОСЛУГ, МАТЕРІАЛІВ ТА ЗНИЖОК
+# -------------------------------------------------------------------------
 if 'services' not in st.session_state:
     st.session_state.services = {
         # --- Послуги ---
@@ -413,7 +419,6 @@ if st.session_state.cart:
         if entered_phone.strip():
             clean_input_digits = "".join(filter(str.isdigit, entered_phone.strip()))
             
-            # Стандартизуємо введений номер до формату 380...
             if clean_input_digits.startswith("380"):
                 target_search_phone = clean_input_digits
             elif clean_input_digits.startswith("0"):
@@ -423,7 +428,6 @@ if st.session_state.cart:
             
             df_check = load_clients_base()
             if not df_check.empty and "Телефон" in df_check.columns:
-                # Робимо цифрову копію телефону в базі для надійного порівняння без розбіжностей
                 df_check["ЧистийТелефон"] = df_check["Телефон"].astype(str).apply(lambda x: "".join(filter(str.isdigit, x)))
                 
                 match = df_check[df_check["ЧистийТелефон"] == target_search_phone]
@@ -447,7 +451,7 @@ if st.session_state.cart:
                 if not already_has_discount:
                     status_lower = client_status.lower()
                     
-                    # Пріоритет пільговим статусам: показуємо тільки одну відповідну кнопку
+                    # Пріоритет пільговим статусам: показуємо чітко одну найвигіднішу пільгову кнопку
                     if "пенсіонер" in status_lower:
                         if st.button("👵 Застосувати Знижка Пенсіонер"):
                             st.session_state.cart.append({"name": "Знижка Пенсіонер", "category": "Знижки", "price": -200, "qty": 1.0, "total": -200, "is_pct": False})
@@ -464,8 +468,8 @@ if st.session_state.cart:
                         if st.button("🎁 Застосувати Знижка постійному клієнту"):
                             st.session_state.cart.append({"name": "Знижка постійному клієнту", "category": "Знижки", "price": -50, "qty": 1.0, "total": -50, "is_pct": False})
                             st.rerun()
-            else:
-                st.info("✅ Знижка вже застосована до цього чека.")
+                else:
+                    st.info("✅ Знижка вже застосована до цього чека.")
             else:
                 st.info("💡 Номер новий. Вкажіть ім'я клієнта:")
                 client_name = st.text_input("👤 Ім'я нового клієнта:")
