@@ -3,35 +3,74 @@ from datetime import datetime, timedelta
 import os
 import pandas as pd
 
-# Список дозволених майстрів (White List)
-ALLOWED_MASTERS = ["Микола", "Олена", "Тато", "Адмін"]
+# =========================================================================
+# 1. НАЛАШТУВАННЯ ТА СПИСКИ (МАЙСТРИ, ПОСЛУГИ, ЦІНИ, ЗНИЖКИ)
+# =========================================================================
 
-# База послуг із категоріями та цінами за замовчуванням
+# СПИСОК ДОЗВОЛЕНИХ МАЙСТРІВ (WHITE LIST)
+# -------------------------------------------------------------------------
+# ПРИКЛАД ДЛЯ КОПІЮВАННЯ (щоб додати нового майстра, просто допиши його ім'я через кому у списку нижче):
+# ALLOWED_MASTERS = ["Микола", "Олена", "Тато", "Адмін", "ТвоєІм'я"]
+ALLOWED_MASTERS = ["Микола", "Олена", "Дмитро", "Адмін"]
+
+
+# БАЗА ПОСЛУГ, МАТЕРІАЛІВ ТА ЗНИЖОК
+# -------------------------------------------------------------------------
+# ПРИКЛАДИ ДЛЯ КОПІЮВАННЯ ТА ДОДАВАННЯ НОВИХ ПОЗИЦІЙ:
+# Додавай нові рядки всередину фігурних дужок {...}, дотримуючись такого формату:
+# "Назва послуги": {"category": "Послуги", "price": ціна_в_гривнях},
+# "Назва матеріалу": {"category": "Матеріали", "price": ціна_в_гривнях},
+# "Знижка у гривнях": {"category": "Знижки", "price": сума_знижки},
+# "Знижка у відсотках": {"category": "Знижки", "price": відсоток, "is_percent": True},
+
 if 'services' not in st.session_state:
     st.session_state.services = {
+        # --- Послуги ---
         "Установка люстри": {"category": "Послуги", "price": 520},
         "Установка і підключення розетки": {"category": "Послуги", "price": 135},
         "Установка і підключення вимикача": {"category": "Послуги", "price": 135},
         "Встановлення та підключення вхідного дзвінка": {"category": "Послуги", "price": 270},
         "Установка і підключення бойлера": {"category": "Послуги", "price": 2090},
+        # СКОПІЮЙ РЯДОК НИЖЧЕ, ВСТАВ СВІЙ ПРИКЛАД І ЗМІНИ НАЗВУ ТА ЦІНУ:
+        # "Заміна автомату": {"category": "Послуги", "price": 350},
+
+        # --- Матеріали ---
         "Розетка одинарна (склад)": {"category": "Матеріали", "price": 100},
         "Розетка одинарна (магазин)": {"category": "Матеріали", "price": 300},
         "Розетка подвійна (склад)": {"category": "Матеріали", "price": 300},
         "Розетка подвійна (магазин)": {"category": "Матеріали", "price": 500},
         "Лампа світлодіодна (склад)": {"category": "Матеріали", "price": 150},
         "Лампа світлодіодна (магазин)": {"category": "Матеріали", "price": 350},
+        # СКОПІЮЙ РЯДОК НИЖЧЕ, ВСТАВ СВІЙ ПРИКЛАД:
+        # "Ізолента": {"category": "Матеріали", "price": 50},
+
+        # --- Інше ---
         "Виїзд майстра": {"category": "Інше", "price": 500},
-        "Знижка пенсіонер": {"category": "Знижки", "price": 200},
-        "Знижка військовий": {"category": "Знижки", "price": 250},
+        # СКОПІЮЙ РЯДОК НИЖЧЕ, ВСТАВ СВІЙ ПРИКЛАД:
+        # "Терміновий виклик": {"category": "Інше", "price": 300},
+
+        # --- Знижки ---
+        # 1. Знижка у фіксованих гривнях:
+        "Знижка Пенсіонер": {"category": "Знижки", "price": 200},
+        "Знижка Військовий": {"category": "Знижки", "price": 250},
         "Знижка постійному клієнту": {"category": "Знижки", "price": 50, "is_percent": False},
-        "Знижка ВПО": {"category": "Знижки", "price": 15, "is_percent": True},  # Автоматично у відсотках!
-        "Акція вихідного дня": {"category": "Знижки", "price": 100, "is_percent": False} # Автоматично у гривнях!
+        # СКОПІЮЙ РЯДОК НИЖЧЕ У ГРИВНЯХ:
+        # "Святкова знижка": {"category": "Знижки", "price": 150, "is_percent": False},
+
+        # 2. Знижка у відсотках (обов'язково з "is_percent": True):
+        "Знижка ВПО": {"category": "Знижки", "price": 15, "is_percent": True},
+        # СКОПІЮЙ РЯДОК НИЖЧЕ У ВІДСОТКАХ:
+        # "VIP знижка": {"category": "Знижки", "price": 20, "is_percent": True},
     }
 
+# Сховище для поточного неоплаченого чека (кошика)
 if 'cart' not in st.session_state:
     st.session_state.cart = []
 
-# Допоміжна функція для безпечного завантаження бази клієнтів із оновленою назвою колонки
+# =========================================================================
+# 2. РОБОТА З БАЗОЮ КЛІЄНТІВ (ФАЙЛ clients_base.xlsx)
+# =========================================================================
+
 def load_clients_base():
     clients_file = "clients_base.xlsx"
     expected_columns = ["Телефон", "Ім'я", "Кількість візитів", "Статус", "Коментар майстра", "Внутрішня примітка", "Останній візит", "Останній майстер"]
@@ -40,7 +79,6 @@ def load_clients_base():
         try:
             df = pd.read_excel(clients_file, dtype={"Телефон": str})
             
-            # Сумісність зі старою назвою колонки, якщо раптом файл вже існує
             if "Коментар клієнта" in df.columns and "Коментар майстра" not in df.columns:
                 df = df.rename(columns={"Коментар клієнта": "Коментар майстра"})
                 
@@ -59,10 +97,13 @@ def load_clients_base():
     
     return pd.DataFrame(columns=expected_columns)
 
+# =========================================================================
+# 3. ІНТЕРФЕЙС ТА АВТОРИЗАЦІЯ МАЙСТРІВ
+# =========================================================================
+
 st.title("✂️ Система розрахунку послуг")
 st.markdown("Робоче місце для оформлення замовлень")
 
-# Авторизація через Білий список
 if 'logged_in_master' not in st.session_state:
     st.session_state.logged_in_master = ""
 
@@ -91,7 +132,9 @@ with col_user2:
 
 master_name = st.session_state.logged_in_master
 
-# Блок «Статистика за сьогодні» для майстра
+# =========================================================================
+# 4. СТАТИСТИКА МАЙСТРА ЗА СЬОГОДНІ
+# =========================================================================
 history_file = "all_sales_history.xlsx"
 today_str = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d")
 
@@ -123,7 +166,10 @@ with col_stat2:
 
 st.markdown("---")
 
-# 1. Вибираємо категорію
+# =========================================================================
+# 5. ВИБІР ПОСЛУГ ТА ДОДАВАННЯ ДО ЧЕКА
+# =========================================================================
+
 categories = ["Послуги", "Матеріали", "Інше", "Знижки"]
 selected_category = st.selectbox("Оберіть категорію:", categories)
 
@@ -225,6 +271,10 @@ if st.button("Додати до чека", type="primary"):
 st.markdown("---")
 st.subheader("🧾 Поточний чек клієнта")
 
+# =========================================================================
+# 6. ВІДОБРАЖЕННЯ КОШИКА ТА КЛІЄНТСЬКА БАЗА
+# =========================================================================
+
 if st.session_state.cart:
     subtotal = sum(item['total'] for item in st.session_state.cart if not item.get('is_pct'))
     
@@ -310,11 +360,9 @@ if st.session_state.cart:
             if is_existing_client:
                 st.success(f"🌟 Знайдено в базі! Клієнт: **{found_client_name}** | Статус: **{client_status}** (Візитів: {client_visits_count})")
                 
-                # --- ВИВЕДЕННЯ ВНУТРІШНЬОЇ ПРИМІТКИ ХОСТА ---
                 if client_host_note:
                     st.warning(f"⚠️ **Внутрішня примітка хоста щодо клієнта:**\n\n {client_host_note}")
                 
-                # Виведення коментаря майстра
                 if client_note:
                     st.info(f"💬 **Коментар майстра:** {client_note}")
                 
@@ -325,52 +373,74 @@ if st.session_state.cart:
                 if not already_has_discount:
                     status_lower = client_status.lower()
                     
+                    # --- АВТОМАТИЧНЕ ЗІСТАВЛЕННЯ ЗНИЖОК ЗІ СТАТУСАМИ ТА ВІЗИТАМИ ---
+                    
                     if "пенсіонер" in status_lower:
-                        if st.button("👵 Застосувати пенсійну знижку (-100 грн)"):
-                            disc_data = st.session_state.services.get("знижка пенсійна", {"price": 100, "is_percent": False})
+                        if st.button("👵 Застосувати Знижка Пенсіонер"):
+                            disc_data = st.session_state.services.get("Знижка Пенсіонер", {"price": 200, "is_percent": False})
                             disc_val = float(disc_data["price"])
+                            disc_is_pct = disc_data.get("is_percent", False)
                             
                             st.session_state.cart.append({
-                                "name": "знижка пенсійна", 
+                                "name": "Знижка Пенсіонер", 
                                 "category": "Знижки",
                                 "price": -disc_val, 
                                 "qty": 1.0, 
                                 "total": -disc_val,
-                                "is_pct": False
+                                "is_pct": disc_is_pct
                             })
-                            st.success("✨ Пенсійну знижку успішно застосовано!")
+                            st.success("✨ «Знижка Пенсіонер» успішно застосована!")
+                            st.rerun()
+                            
+                    elif "військовий" in status_lower:
+                        if st.button("🪖 Застосувати Знижка Військовий"):
+                            disc_data = st.session_state.services.get("Знижка Військовий", {"price": 250, "is_percent": False})
+                            disc_val = float(disc_data["price"])
+                            disc_is_pct = disc_data.get("is_percent", False)
+                            
+                            st.session_state.cart.append({
+                                "name": "Знижка Військовий", 
+                                "category": "Знижки",
+                                "price": -disc_val, 
+                                "qty": 1.0, 
+                                "total": -disc_val,
+                                "is_pct": disc_is_pct
+                            })
+                            st.success("✨ «Знижка Військовий» успішно застосована!")
                             st.rerun()
                             
                     elif "впо" in status_lower:
-                        if st.button("💙💛 Застосувати знижку ВПО (-15%)"):
-                            disc_data = st.session_state.services.get("знижка ВПО", {"price": 15, "is_percent": True})
+                        if st.button("💙💛 Застосувати Знижка ВПО"):
+                            disc_data = st.session_state.services.get("Знижка ВПО", {"price": 15, "is_percent": True})
                             disc_val = float(disc_data["price"])
+                            disc_is_pct = disc_data.get("is_percent", True)
                             
                             st.session_state.cart.append({
-                                "name": f"знижка ВПО ({disc_val}%)", 
+                                "name": f"Знижка ВПО ({disc_val}%)", 
                                 "category": "Знижки",
                                 "price": -disc_val, 
                                 "qty": 1.0, 
                                 "total": -disc_val,
-                                "is_pct": True
+                                "is_pct": disc_is_pct
                             })
-                            st.success("✨ Знижку ВПО успішно застосовано!")
+                            st.success("✨ «Знижка ВПО» успішно застосована!")
                             st.rerun()
                             
                     elif client_visits_count >= 2 or "постійний" in status_lower:
-                        if st.button("🎁 Застосувати знижку постійному клієнту (-50 грн)"):
-                            disc_data = st.session_state.services.get("знижка постійному клієнту", {"price": 50, "is_percent": False})
+                        if st.button("🎁 Застосувати Знижка постійному клієнту"):
+                            disc_data = st.session_state.services.get("Знижка постійному клієнту", {"price": 50, "is_percent": False})
                             disc_val = float(disc_data["price"])
+                            disc_is_pct = disc_data.get("is_percent", False)
                             
                             st.session_state.cart.append({
-                                "name": "знижка постійному клієнту", 
+                                "name": "Знижка постійному клієнту", 
                                 "category": "Знижки",
                                 "price": -disc_val, 
                                 "qty": 1.0, 
                                 "total": -disc_val,
-                                "is_pct": False
+                                "is_pct": disc_is_pct
                             })
-                            st.success("✨ Знижку постійного клієнта успішно застосовано!")
+                            st.success("✨ «Знижка постійному клієнту» успішно застосована!")
                             st.rerun()
                 else:
                     st.info("✅ Знижка вже застосована до цього чека.")
@@ -378,7 +448,6 @@ if st.session_state.cart:
                 st.info("💡 Номер новий для системи. Вкажіть ім'я нового клієнта нижче:")
                 client_name = st.text_input("👤 Ім'я нового клієнта:", placeholder="Наприклад: Олена")
     
-    # Поле для коментаря майстра
     new_master_comment = st.text_input("💬 Коментар майстра щодо цього візиту (збережеться в базу):", value=client_note, placeholder="Особливості роботи, побажання клієнта...")
     
     col1, col2 = st.columns(2)
@@ -410,7 +479,6 @@ if st.session_state.cart:
                     cleaned_phone = f"'{full_phone_num}"
                     cleaned_name = client_name.strip() if client_name.strip() else found_client_name
                 
-                # --- ОНОВЛЕННЯ / ЗБЕРЕЖЕННЯ БАЗИ КЛІЄНТІВ ---
                 if not is_anon:
                     df_clients = load_clients_base()
                     
@@ -458,7 +526,6 @@ if st.session_state.cart:
                         
                     df_clients.to_excel(clients_file, index=False)
                 
-                # --- ЗБЕРЕЖЕННЯ ЧЕКА В ІСТОРІЮ МАЙСТРА ---
                 next_receipt_num = 1
                 if os.path.exists(history_file):
                     try:
@@ -531,12 +598,18 @@ if st.session_state.cart:
 else:
     st.info("Поки що порожній чек.")
 
-# --- ЗАХИЩЕНА ПАНЕЛЬ ХОСТА ---
+# =========================================================================
+# 7. ЗАХИЩЕНА ПАНЕЛЬ ХОСТА ( АДМІНІСТРАТОРА )
+# =========================================================================
 st.markdown("---")
 with st.expander("🔒 Панель хоста (Історія та аналітика за майстрами)"):
+    
+    # ПАРОЛЬ АДМІНІСТРАТОРА
+    # ---------------------------------------------------------------------
+    # ПРИКЛАД ДЛЯ ЗМІНИ ПАРОЛЯ: заміни "1234" на свій власний код, наприклад "0000" або "admin2026"
     admin_password = st.text_input("Введіть пароль адміністратора:", type="password")
     
-    if admin_password == "1234":
+    if admin_password == "1111":
         st.success("Доступ дозволено!")
         history_file = "all_sales_history.xlsx"
         clients_file = "clients_base.xlsx"
