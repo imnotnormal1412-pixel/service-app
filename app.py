@@ -56,7 +56,11 @@ def load_clients_base():
     
     if os.path.exists(clients_file):
         try:
-            df = pd.read_excel(clients_file, dtype={"Телефон": str})
+            df = pd.read_excel(clients_file, dtype=str) # Читаємо все одразу як текст!
+            
+            # Примусово очищаємо телефон від зайвих .0 та пробілів
+            if "Телефон" in df.columns:
+                df["Телефон"] = df["Телефон"].str.split('.').str[0].str.strip()
             
             if "Коментар клієнта" in df.columns and "Коментар майстра" not in df.columns:
                 df = df.rename(columns={"Коментар клієнта": "Коментар майстра"})
@@ -75,7 +79,6 @@ def load_clients_base():
             pass
     
     return pd.DataFrame(columns=expected_columns)
-
 # =========================================================================
 # 3. ІНТЕРФЕЙС ТА АВТОРИЗАЦІЯ
 # =========================================================================
