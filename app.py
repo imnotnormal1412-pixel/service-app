@@ -8,13 +8,8 @@ import pandas as pd
 # =========================================================================
 
 # СПИСОК ДОЗВОЛЕНИХ МАЙСТРІВ (WHITE LIST)
-# -------------------------------------------------------------------------
-# Сюди можна додати спеціальні слова для входу в панель хоста (наприклад, "Адмін", "Хост")
 ALLOWED_MASTERS = ["Микола", "Олена", "Тато", "Адмін", "Хост"]
 
-
-# БАЗА ПОСЛУГ, МАТЕРІАЛІВ ТА ЗНИЖОК
-# -------------------------------------------------------------------------
 if 'services' not in st.session_state:
     st.session_state.services = {
         # --- Послуги ---
@@ -57,8 +52,6 @@ def load_clients_base():
     if os.path.exists(clients_file):
         try:
             df = pd.read_excel(clients_file, dtype=str)
-            
-            # Примусово переводимо телефон у текст і прибираємо крапки (.0)
             if "Телефон" in df.columns:
                 df["Телефон"] = df["Телефон"].astype(str).str.split('.').str[0].str.strip()
             
@@ -96,9 +89,11 @@ if not st.session_state.logged_in_master:
         submit_login = st.form_submit_button("Увійти в систему", type="primary")
         
         if submit_login:
-            clean_name = entered_name.strip()
+            clean_name = entered_name.strip().capitalize() # Приводимо до єдиного формату (перша велика)
             if any(clean_name.lower() == m.lower() for m in ALLOWED_MASTERS):
-                st.session_state.logged_in_master = clean_name
+                # Знаходимо точну канонічну назву майстра з ALLOWED_MASTERS
+                exact_master_name = next(m for m in ALLOWED_MASTERS if m.lower() == clean_name.lower())
+                st.session_state.logged_in_master = exact_master_name
                 st.rerun()
             else:
                 st.error("❌ Доступ заборонено: такого користувача немає в системі.")
@@ -140,7 +135,6 @@ if master_name.lower() in ["адмін", "хост"]:
                 st.rerun()
         with col_nav2:
             if st.button("🔄 Оновити історію чеків та базу"):
-                # Повністю очищуємо будь-який збережений кеш Streamlit перед перезапуском
                 st.cache_data.clear()
                 st.rerun()
 
@@ -546,14 +540,26 @@ if st.session_state.cart:
                 })
                 
                 df_new = pd.DataFrame(new_rows)
+                
+                # --- ІДЕАЛЬНЕ ЗБЕРЕЖЕННЯ В АРКУШ МАЙСТРА БЕЗ ДУБЛЮВАННЯ ---
                 if os.path.exists(history_file):
+                    xls_check = pd.ExcelFile(history_file)
+                    # Шукаємо, чи є вже аркуш з таким самим іменем (ігноруючи регістр)
+                    existing_sheet = next((sh for sh in xls_check.sheet_names if sh.lower() == master_name.lower()), None)
+                    target_sheet_name = existing_sheet if existing_sheet else master_name
+
                     with pd.ExcelWriter(history_file, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
                         try:
-                            df_old_m = pd.read_excel(history_file, sheet_name=master_name)
-                            df_combined = pd.concat([df_old_m, pd.DataFrame([{col: None for col in df_old_m.columns}]), df_new], ignore_index=True) if "Послуга/Позиція" in df_old_m.columns else df_new
+                            df_old_m = pd.read_excel(history_file, sheet_name=target_sheet_name)
+                            if "Послуга/Позиція" not in df_old_m.columns:
+                                df_combined = df_new
+                            else:
+                                empty_row = {col: None for col in df_old_m.columns}
+                                df_combined = pd.concat([df_old_m, pd.DataFrame([empty_row]), df_new], ignore_index=True)
                         except Exception:
                             df_combined = df_new
-                        df_combined.to_excel(writer, sheet_name=master_name, index=False)
+                        
+                        df_combined.to_excel(writer, sheet_name=target_sheet_name, index=False)
                 else:
                     with pd.ExcelWriter(history_file, engine='openpyxl') as writer:
                         df_new.to_excel(writer, sheet_name=master_name, index=False)
