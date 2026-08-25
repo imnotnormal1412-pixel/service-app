@@ -446,18 +446,26 @@ if st.session_state.cart:
                 already_has_discount = any(item['category'] == "Знижки" for item in st.session_state.cart)
                 if not already_has_discount:
                     status_lower = client_status.lower()
-                    if "пенсіонер" in status_lower and st.button("👵 Застосувати Знижка Пенсіонер"):
-                        st.session_state.cart.append({"name": "Знижка Пенсіонер", "category": "Знижки", "price": -200, "qty": 1.0, "total": -200, "is_pct": False})
-                        st.rerun()
-                    elif "військовий" in status_lower and st.button("🪖 Застосувати Знижка Військовий"):
-                        st.session_state.cart.append({"name": "Знижка Військовий", "category": "Знижки", "price": -250, "qty": 1.0, "total": -250, "is_pct": False})
-                        st.rerun()
-                    elif "впо" in status_lower and st.button("💙💛 Застосувати Знижка ВПО"):
-                        st.session_state.cart.append({"name": "Знижка ВПО (15%)", "category": "Знижки", "price": -15, "qty": 1.0, "total": -15, "is_pct": True})
-                        st.rerun()
-                    elif (client_visits_count >= 2 or "постійний" in status_lower) and st.button("🎁 Застосувати Знижка постійному клієнту"):
-                        st.session_state.cart.append({"name": "Знижка постійному клієнту", "category": "Знижки", "price": -50, "qty": 1.0, "total": -50, "is_pct": False})
-                        st.rerun()
+                    
+                    # Пріоритет пільговим статусам: показуємо тільки одну відповідну кнопку
+                    if "пенсіонер" in status_lower:
+                        if st.button("👵 Застосувати Знижка Пенсіонер"):
+                            st.session_state.cart.append({"name": "Знижка Пенсіонер", "category": "Знижки", "price": -200, "qty": 1.0, "total": -200, "is_pct": False})
+                            st.rerun()
+                    elif "військовий" in status_lower:
+                        if st.button("🪖 Застосувати Знижка Військовий"):
+                            st.session_state.cart.append({"name": "Знижка Військовий", "category": "Знижки", "price": -250, "qty": 1.0, "total": -250, "is_pct": False})
+                            st.rerun()
+                    elif "впо" in status_lower:
+                        if st.button("💙💛 Застосувати Знижка ВПО"):
+                            st.session_state.cart.append({"name": "Знижка ВПО (15%)", "category": "Знижки", "price": -15, "qty": 1.0, "total": -15, "is_pct": True})
+                            st.rerun()
+                    elif client_visits_count >= 2 or "постійний" in status_lower:
+                        if st.button("🎁 Застосувати Знижка постійному клієнту"):
+                            st.session_state.cart.append({"name": "Знижка постійному клієнту", "category": "Знижки", "price": -50, "qty": 1.0, "total": -50, "is_pct": False})
+                            st.rerun()
+            else:
+                st.info("✅ Знижка вже застосована до цього чека.")
             else:
                 st.info("💡 Номер новий. Вкажіть ім'я клієнта:")
                 client_name = st.text_input("👤 Ім'я нового клієнта:")
