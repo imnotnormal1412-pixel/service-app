@@ -7,7 +7,6 @@ import pandas as pd
 # 1. НАЛАШТУВАННЯ ТА СПИСКИ (МАЙСТРИ, ПОСЛУГИ, ЦІНИ, ЗНИЖКИ)
 # =========================================================================
 
-# СПИСОК ДОЗВОЛЕНИХ МАЙСТРІВ (WHITE LIST)
 ALLOWED_MASTERS = ["Микола", "Олена", "Тато", "Адмін", "Хост"]
 
 if 'services' not in st.session_state:
@@ -139,18 +138,16 @@ if master_name.lower() in ["адмін", "хост"]:
 
         st.markdown("---")
         
-        # БЛОК 1: АНАЛІТИЧНИЙ ДАШБОРД ТА РЕЙТИНГ МАЙСТРІВ (ПОКРАЩЕНИЙ ЗБІР ДАНИХ)
+        # БЛОК 1: АНАЛІТИЧНИЙ ДАШБОРД ТА РЕЙТИНГ МАЙСТРІВ
         st.subheader("📊 Аналітика та рейтинг успішності майстрів")
         history_file = "all_sales_history.xlsx"
         
         if os.path.exists(history_file):
             try:
-                # Читаємо файл без кешування, щоб бачити найсвіжіші рядки
                 xls = pd.ExcelFile(history_file)
                 all_masters_data = []
                 
                 for sheet in xls.sheet_names:
-                    # Пропускаємо технічні аркуші, якщо вони є, читаємо тільки майстрів
                     df_sh = pd.read_excel(history_file, sheet_name=sheet)
                     if not df_sh.empty and "Сума (грн)" in df_sh.columns:
                         df_sh["Майстер_Аркуш"] = sheet
@@ -180,11 +177,9 @@ if master_name.lower() in ["адмін", "хост"]:
                     else:
                         df_filtered_stat = df_all_sales
 
-                    # Шукаємо рядки підсумків чеків
                     df_totals = df_filtered_stat[df_filtered_stat["Категорія"].astype(str).str.contains("ЗАГАЛОМ", case=False, na=False)]
                     
                     if not df_totals.empty and "Майстер" in df_totals.columns and "Сума (грн)" in df_totals.columns:
-                        # Приводимо суму до числа на випадок текстового формату
                         df_totals["Сума (грн)"] = pd.to_numeric(df_totals["Сума (грн)"], errors='coerce').fillna(0)
                         
                         rating_df = df_totals.groupby("Майстер").agg(
@@ -203,10 +198,21 @@ if master_name.lower() in ["адмін", "хост"]:
 
         st.markdown("---")
         
-        # БЛОК 2: КЛІЄНТСЬКА БАЗА
+        # БЛОК 2: КЛІЄНТСЬКА БАЗА ЗІ ШВИДКИМ ПОШУКОМ
         st.subheader("👥 Клієнтська база")
         clients_file = "clients_base.xlsx"
         if os.path.exists(clients_file):
+            df_cl_view = load_clients_base()
+            
+            # Швидкий пошук по клієнтах
+            search_query = st.text_input("🔍 Швидкий пошук клієнта (за ім'ям або телефоном):", placeholder="Введіть ім'я або цифри номера...")
+            if search_query.strip():
+                query_lower = search_query.strip().lower()
+                df_cl_view = df_cl_view[
+                    df_cl_view["Ім'я"].astype(str).str.lower().str.contains(query_lower, na=False) | 
+                    df_cl_view["Телефон"].astype(str).str.contains(query_lower, na=False)
+                ]
+            
             with open(clients_file, "rb") as f:
                 client_excel_bytes = f.read()
             st.download_button(
@@ -215,11 +221,7 @@ if master_name.lower() in ["адмін", "хост"]:
                 file_name="basa_klientiv.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-            try:
-                df_cl_view = pd.read_excel(clients_file)
-                st.dataframe(df_cl_view, use_container_width=True)
-            except Exception:
-                pass
+            st.dataframe(df_cl_view, use_container_width=True)
         else:
             st.info("Клієнтська база поки пуста.")
             
@@ -237,14 +239,62 @@ if master_name.lower() in ["адмін", "хост"]:
 
         st.markdown("---")
         
-        # БЛОК 3: ІСТОРІЯ ТА ПЕРЕГЛЯД ЧЕКІВ
+        # БЛОК 3: ІСТОРІЯ, ЗВІТИ ТА ЛОГУВАННЯ ДІЙ
         st.subheader("📁 Перегляд чеків та управління архівом")
         if os.path.exists(history_file):
+            
+            # Кнопка формування місячного звіту
+            if st.button("📊 Сформувати місячний звіт (за поточний місяць)"):
+                try:
+                    xls_rep = pd.ExcelFile(history_file)
+                    rep_data = []
+                    for sh in xls_rep.sheet_names:
+                        df_sh = pd.read_excel(history_file, sheet_name=sh)
+                        if not df_sh.empty and "Час" in df_sh.columns:
+                            df_sh["datetime_obj"] = pd.to_datetime(df_sh["Час"], errors='coerce')
+                            current_month = datetime.now().month
+                            current_year = datetime.now().year
+                            df_month = df_sh[(df_sh["datetime_obj"].dt.month == current_month) & (df_sh["datetime_obj"].dt.year == current_year)]
+                            if not df_month.empty:
+                                df_month["Майстер"] = sh
+                                rep_data.append(df_month.drop(columns=["datetime_obj"]))
+                    
+                    if rep_data:
+                        df_monthly_report = pd.concat(rep_data, ignore_index=True)
+                        report_filename = f"misyachny_zvit_{datetime.now().strftime('%Y_%m')}.xlsx"
+                        df_monthly_report.to_excel(report_filename, index=False)
+                        with open(report_filename, "rb") as rf:
+                            st.download_button(
+                                label="📥 Завантажити місячний звіт (.xlsx)",
+                                data=rf.read(),
+                                file_name=report_filename,
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                type="primary"
+                            )
+                        st.success("🎉 Місячний звіт успішно сформовано!")
+                    else:
+                        st.warning("⚠️ За поточний місяць ще немає збережених чеків.")
+                except Exception as e:
+                    st.error(f"Помилка формування звіту: {e}")
+
             if st.button("🗑️ Очистити всю історію чеків"):
+                # Логування дій (додаємо службовий запис перед видаленням)
+                log_time = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
+                log_msg = f"[{log_time}] АДМІНІСТРАТОР очистив всю історію чеків.\n"
+                with open("action_audit_log.txt", "a", encoding="utf-8") as log_file:
+                    log_file.write(log_msg)
+                
                 os.remove(history_file)
-                st.success("Архів чеків очищено!")
+                st.success("Архів чеків успішно очищено! Дюжу зафіксовано в логах.")
                 st.rerun()
             
+            # Кнопка перегляду логів аудиту (на випадок перевірки форс-мажорів)
+            if os.path.exists("action_audit_log.txt"):
+                with open("action_audit_log.txt", "r", encoding="utf-8") as lf:
+                    log_contents = lf.read()
+                with st.expander("🔍 Переглянути журнал логів (аудит дій)"):
+                    st.text(log_contents)
+
             with open(history_file, "rb") as f:
                 excel_bytes = f.read()
             st.download_button(
@@ -526,7 +576,6 @@ if st.session_state.cart:
                 if os.path.exists(history_file):
                     try:
                         xls = pd.ExcelFile(history_file)
-                        # Шукаємо аркуш майстра без урахування регістру (Микола == микола == МИКОЛА)
                         existing_sheet = next((sh for sh in xls.sheet_names if sh.lower() == master_name.lower()), None)
                         if existing_sheet:
                             df_old = pd.read_excel(history_file, sheet_name=existing_sheet)
