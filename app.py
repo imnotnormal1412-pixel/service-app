@@ -40,6 +40,9 @@ if 'services' not in st.session_state:
 if 'cart' not in st.session_state:
     st.session_state.cart = []
 
+if 'confirm_clear_history' not in st.session_state:
+    st.session_state.confirm_clear_history = False
+
 # =========================================================================
 # 2. РОБОТА З БАЗОЮ КЛІЄНТІВ ТА ІСТОРІЄЮ
 # =========================================================================
@@ -113,6 +116,7 @@ if master_name.lower() in ["адмін", "хост"]:
     with col_back2:
         if st.button("⬅️ Вийти / Змінити користувача"):
             st.session_state.logged_in_master = ""
+            st.session_state.confirm_clear_history = False
             st.rerun()
 
     if enter_admin:
@@ -130,6 +134,7 @@ if master_name.lower() in ["адмін", "хост"]:
             if st.button("⬅️ Повернутися до оформлення чеку"):
                 st.session_state.logged_in_master = ""
                 st.session_state.host_authenticated = False
+                st.session_state.confirm_clear_history = False
                 st.rerun()
         with col_nav2:
             if st.button("🔄 Оновити історію чеків та базу"):
@@ -238,11 +243,10 @@ if master_name.lower() in ["адмін", "хост"]:
 
         st.markdown("---")
         
-        # БЛОК 3: ІСТОРІЯ, ЗВІТИ ТА ЛОГУВАННЯ ДІЙ
+        # БЛОК 3: ІСТОРІЯ, ЗВІТИ ТА ЗАХИЩЕНЕ ОЧИЩЕННЯ
         st.subheader("📁 Перегляд чеків та управління архівом")
         if os.path.exists(history_file):
             
-            # НОВИЙ ФОРМАТ МІСЯЧНОГО ЗВІТУ (ЗВЕДЕНИЙ ТА КОМПАКТНИЙ)
             if st.button("📊 Сформувати місячний звіт (зведений звіт за поточний місяць)"):
                 try:
                     xls_rep = pd.ExcelFile(history_file)
@@ -257,25 +261,21 @@ if master_name.lower() in ["адмін", "хост"]:
                             df_month = df_sh[(df_sh["datetime_obj"].dt.month == current_month) & (df_sh["datetime_obj"].dt.year == current_year)]
                             
                             if not df_month.empty:
-                                # Витягуємо тільки рядки підсумків чеків для чистого реєстру
                                 df_check_totals = df_month[df_month["Категорія"].astype(str).str.contains("ЗАГАЛОМ", case=False, na=False)].copy()
                                 if not df_check_totals.empty:
                                     df_check_totals["Майстер"] = sh
                                     df_check_totals["Дата"] = df_check_totals["datetime_obj"].dt.strftime("%Y-%m-%d")
-                                    # Обираємо головні колонки для компактного реєстру
                                     clean_registry = df_check_totals[["Дата", "Майстер", "№ чека", "Ім'я клієнта", "Сума (грн)"]].rename(columns={"Сума (грн)": "Сума чека (грн)"})
                                     rep_totals.append(clean_registry)
                     
                     if rep_totals:
                         df_full_registry = pd.concat(rep_totals, ignore_index=True)
                         
-                        # Формуємо зведену таблицю по майстрах
                         df_summary_masters = df_full_registry.groupby("Майстер").agg(
                             Кількість_чеків=("№ чека", "nunique"),
                             Загальна_виручка=("Сума чека (грн)", "sum")
                         ).reset_index()
                         
-                        # Додаємо рядок "ВСЬОГО" в кінці зведеної таблиці
                         total_row = pd.DataFrame([{
                             "Майстер": "ВСЬОГО ПО МАЙСТЕРНІ",
                             "Кількість_чеків": df_full_registry["№ чека"].nunique(),
@@ -285,7 +285,6 @@ if master_name.lower() in ["адмін", "хост"]:
 
                         report_filename = f"zvedeny_misyachny_zvit_{datetime.now().strftime('%Y_%m')}.xlsx"
                         
-                        # Зберігаємо в файл з двома окремими вкладками (аркушами)
                         with pd.ExcelWriter(report_filename, engine='openpyxl') as writer:
                             df_summary_masters.to_excel(writer, sheet_name="Звіт по майстрах", index=False)
                             df_full_registry.to_excel(writer, sheet_name="Реєстр чеків", index=False)
@@ -298,21 +297,43 @@ if master_name.lower() in ["адмін", "хост"]:
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                 type="primary"
                             )
-                        st.success("🎉 Зведений місячний звіт успішно сформовано (2 вкладки: зведення та реєстр)!")
+                        st.success("🎉 Зведений місячний звіт успішно сформовано!")
                     else:
                         st.warning("⚠️ За поточний місяць ще немає збережених чеків.")
                 except Exception as e:
                     st.error(f"Помилка формування звіту: {e}")
 
-            if st.button("🗑️ Очистити всю історію чеків"):
-                log_time = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
-                log_msg = f"[{log_time}] АДМІНІСТРАТОР очистив всю історію чеків.\n"
-                with open("action_audit_log.txt", "a", encoding="utf-8") as log_file:
-                    log_file.write(log_msg)
+            # ЗАХИЩЕНЕ ОЧИЩЕННЯ ІСТОРІЇ (ІЗ ПІДТВЕРДЖЕННЯМ ТА ПАРОЛЕМ)
+            st.markdown("---")
+            st.warning("⚠️ **Зона адміністратора:** Очищення історії чеків видалить усі дані назавжди.")
+            
+            if not st.session_state.confirm_clear_history:
+                if st.button("🗑️ Очистити всю історію чеків"):
+                    st.session_state.confirm_clear_history = True
+                    st.rerun()
+            else:
+                st.error("❗ УВАГА: Ви дійсно хочете видалити всі чеки? Цю дію неможливо скасувати!")
+                clear_pass = st.text_input("Введіть підтверджуючий пароль хоста для видалення:", type="password", key="clear_history_pass_input")
                 
-                os.remove(history_file)
-                st.success("Архів чеків успішно очищено! Дюжу зафіксовано в логах.")
-                st.rerun()
+                col_c1, col_c2 = st.columns(2)
+                with col_c1:
+                    if st.button("🔴 ТАК, ВИДАЛИТИ НАЗАВЖДИ", type="primary"):
+                        if clear_pass == "1234": # Пароль для підтвердження видалення
+                            log_time = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
+                            log_msg = f"[{log_time}] АДМІНІСТРАТОР успішно очистив всю історію чеків.\n"
+                            with open("action_audit_log.txt", "a", encoding="utf-8") as log_file:
+                                log_file.write(log_msg)
+                            
+                            os.remove(history_file)
+                            st.session_state.confirm_clear_history = False
+                            st.success("Архів чеків успішно очищено!")
+                            st.rerun()
+                        else:
+                            st.error("❌ Неправильний пароль підтвердження!")
+                with col_c2:
+                    if st.button("✖️ Скасувати"):
+                        st.session_state.confirm_clear_history = False
+                        st.rerun()
             
             if os.path.exists("action_audit_log.txt"):
                 with open("action_audit_log.txt", "r", encoding="utf-8") as lf:
