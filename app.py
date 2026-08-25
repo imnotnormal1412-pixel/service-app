@@ -526,8 +526,10 @@ if st.session_state.cart:
                 if os.path.exists(history_file):
                     try:
                         xls = pd.ExcelFile(history_file)
-                        if master_name in xls.sheet_names:
-                            df_old = pd.read_excel(history_file, sheet_name=master_name)
+                        # Шукаємо аркуш майстра без урахування регістру (Микола == микола == МИКОЛА)
+                        existing_sheet = next((sh for sh in xls.sheet_names if sh.lower() == master_name.lower()), None)
+                        if existing_sheet:
+                            df_old = pd.read_excel(history_file, sheet_name=existing_sheet)
                             if "№ чека" in df_old.columns and not df_old["№ чека"].dropna().empty:
                                 next_receipt_num = int(df_old["№ чека"].dropna().max()) + 1
                     except Exception:
