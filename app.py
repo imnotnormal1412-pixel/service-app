@@ -140,6 +140,8 @@ if master_name.lower() in ["адмін", "хост"]:
                 st.rerun()
         with col_nav2:
             if st.button("🔄 Оновити історію чеків та базу"):
+                # Повністю очищуємо будь-який збережений кеш Streamlit перед перезапуском
+                st.cache_data.clear()
                 st.rerun()
 
         st.markdown("---")
