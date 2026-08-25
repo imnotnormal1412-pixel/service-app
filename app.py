@@ -44,7 +44,7 @@ if 'confirm_clear_history' not in st.session_state:
     st.session_state.confirm_clear_history = False
 
 # =========================================================================
-# 2. РОБОТА З БАЗОЮ КЛІЄНТІВ ТА ІСТОРІЄЮ
+# 2. РОБОТА З БАЗОЮ КЛІЄНТІВ, СКЛАДОМ ТА ІСТОРІЄЮ
 # =========================================================================
 
 def load_clients_base():
@@ -75,6 +75,51 @@ def load_clients_base():
     
     return pd.DataFrame(columns=expected_columns)
 
+def load_warehouse_stock():
+    warehouse_file = "warehouse_stock.xlsx"
+    # Витягуємо всі матеріали зі списку послуг автоматично
+    materials_list = [name for name, data in st.session_state.services.items() if data["category"] == "Матеріали"]
+    
+    if os.path.exists(warehouse_file):
+        try:
+            df = pd.read_excel(warehouse_file, dtype=str)
+            df["Залишок (шт)"] = pd.to_numeric(df["Залишок (шт)"], errors='coerce').fillna(15).astype(int)
+            
+            # Перевіряємо, чи з'явилися нові матеріали у системі, яких ще немає в Excel
+            existing_materials = df["Матеріал"].tolist()
+            new_rows = []
+            for mat in materials_list:
+                if mat not in existing_materials:
+                    new_rows.append({"Матеріал": mat, "Залишок (шт)": 15})
+            if new_rows:
+                df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
+                df.to_excel(warehouse_file, index=False)
+            return df
+        except Exception:
+            pass
+    
+    # Створюємо файл складу з початковими залишками (по 15 шт кожної позиції)
+    initial_data = [{"Матеріал": mat, "Залишок (шт)": 15} for mat in materials_list]
+    df = pd.DataFrame(initial_data)
+    df.to_excel(warehouse_file, index=False)
+    return df
+
+def update_warehouse_after_sale(cart_items):
+    warehouse_file = "warehouse_stock.xlsx"
+    df_stock = load_warehouse_stock()
+    
+    for item in cart_items:
+        if item["category"] == "Матеріали":
+            mat_name = item["name"]
+            sold_qty = item["qty"]
+            if mat_name in df_stock["Матеріал"].values:
+                idx = df_stock[df_stock["Матеріал"] == mat_name].index[0]
+                current_qty = int(df_stock.loc[idx, "Залишок (шт)"])
+                new_qty = max(0, current_qty - int(sold_qty))
+                df_stock.loc[idx, "Залишок (шт)"] = new_qty
+                
+    df_stock.to_excel(warehouse_file, index=False)
+
 # =========================================================================
 # 3. ІНТЕРФЕЙС ТА АВТОРИЗАЦІЯ
 # =========================================================================
@@ -85,16 +130,18 @@ if 'logged_in_master' not in st.session_state:
     st.session_state.logged_in_master = ""
 
 if not st.session_state.logged_in_master:
-    st.warning("👋 Будь ласка, введіть ваше ім'я для входу (або «Адмін» для доступу в Панель хоста).")
+    st.warning("👋 Будь ласка, введіть ваше ім'я для входу (або «Адмін» для доступу в Панель хоста / «Склад» для управління залишками).")
     with st.form("login_form"):
         entered_name = st.text_input("Ім'я майстра / Вхід:")
         submit_login = st.form_submit_button("Увійти в систему", type="primary")
         
         if submit_login:
             clean_name = entered_name.strip().capitalize()
-            if any(clean_name.lower() == m.lower() for m in ALLOWED_MASTERS):
-                exact_master_name = next(m for m in ALLOWED_MASTERS if m.lower() == clean_name.lower())
-                st.session_state.logged_in_master = exact_master_name
+            # Дозволяємо вхід також для "Склад"
+            allowed_check = ALLOWED_MASTERS + ["Склад"]
+            if any(clean_name.lower() == m.lower() for m in allowed_check):
+                exact_name = next(m for m in allowed_check if m.lower() == clean_name.lower())
+                st.session_state.logged_in_master = "Склад" if exact_name.lower() == "склад" else exact_name
                 st.rerun()
             else:
                 st.error("❌ Доступ заборонено: такого користувача немає в системі.")
@@ -103,7 +150,92 @@ if not st.session_state.logged_in_master:
 master_name = st.session_state.logged_in_master
 
 # =========================================================================
-# АВТОРИЗАЦІЯ ХОСТА / АДМІНІСТРАТОРА (ОКРЕМУ ПАНЕЛЬ)
+# АВТОРИЗАЦІЯ ПАНЕЛІ "СКЛАД / ІНВЕНТАРИЗАЦІЯ"
+# =========================================================================
+if master_name.lower() == "склад":
+    st.markdown("---")
+    st.subheader("📦 Панель управління складом та залишками")
+    
+    col_w1, col_w2 = st.columns(2)
+    with col_w1:
+        if st.button("⬅️ Повернутися до вибору користувача"):
+            st.session_state.logged_in_master = ""
+            st.rerun()
+    with col_w2:
+        if st.button("🔄 Оновити дані складу"):
+            st.cache_data.clear()
+            st.rerun()
+
+    st.markdown("---")
+    
+    # 1. ТАБЛИЦЯ ЗАЛИШКІВ ІЗ СВІТЛОФОРОМ
+    st.subheader("📋 Поточні залишки матеріалів на полицях")
+    df_stock_view = load_warehouse_stock()
+    
+    # Додаємо статусне забарвлення залишків
+    def stock_status(qty):
+        if qty <= 1:
+            return "🔴 КРИТИЧНО (Треба докупити!)"
+        elif qty <= 4:
+            return "🟡 Закінчується"
+        else:
+            return "🟢 Достатньо"
+            
+    df_stock_view["Статус"] = df_stock_view["Залишок (шт)"].apply(stock_status)
+    st.dataframe(df_stock_view, use_container_width=True)
+    
+    # 2. ФОРМА ПОПОВНЕННЯ СКЛАДУ (ПРИХІД ТОВАРУ)
+    st.markdown("---")
+    st.subheader("➕ Поповнити склад (Прихід партії)")
+    with st.form("restock_form"):
+        mat_to_restock = st.selectbox("Оберіть матеріал для поповнення:", df_stock_view["Матеріал"].tolist())
+        qty_added = st.number_input("Кількість од. для додавання:", min_value=1, value=10, step=1)
+        submit_restock = st.form_submit_button("Збільшити залишок на складі", type="primary")
+        
+        if submit_restock:
+            idx = df_stock_view[df_stock_view["Матеріал"] == mat_to_restock].index[0]
+            current_val = int(df_stock_view.loc[idx, "Залишок (шт)"])
+            df_stock_view.loc[idx, "Залишок (шт)"] = current_val + int(qty_added)
+            df_stock_view.to_excel("warehouse_stock.xlsx", index=False)
+            st.success(f"🎉 Склад успішно поповнено! Додано {qty_added} шт. до «{mat_to_restock}».")
+            st.rerun()
+
+    # 3. РЕЙТИНГ ПОПУЛЯРНОСТІ МАТЕРІАЛІВ
+    st.markdown("---")
+    st.subheader("🏆 Рейтинг популярності матеріалів (Списання)")
+    history_file = "all_sales_history.xlsx"
+    if os.path.exists(history_file):
+        try:
+            xls = pd.ExcelFile(history_file)
+            all_history_sheets = []
+            for sh in xls.sheet_names:
+                df_sh = pd.read_excel(history_file, sheet_name=sh)
+                if not df_sh.empty and "Категорія" in df_sh.columns:
+                    all_history_sheets.append(df_sh)
+            
+            if all_history_sheets:
+                df_all_h = pd.concat(all_history_sheets, ignore_index=True)
+                df_materials_only = df_all_h[df_all_h["Категорія"] == "Матеріали"]
+                
+                if not df_materials_only.empty and "Послуга/Позиція" in df_materials_only.columns and "Кількість" in df_materials_only.columns:
+                    df_materials_only["Кількість"] = pd.to_numeric(df_materials_only["Кількість"], errors='coerce').fillna(1)
+                    mat_rating = df_materials_only.groupby("Послуга/Позиція").agg(
+                        Всього_списано=("Кількість", "sum"),
+                        Кількість_продажів=("№ чека", "count")
+                    ).reset_index().sort_values(by="Всього_списано", ascending=False)
+                    
+                    st.dataframe(mat_rating, use_container_width=True)
+                else:
+                _   st.info("Поки немає даних про списання матеріалів в чеках.")
+        except Exception as e:
+            st.info(f"Помилка формування рейтингу матеріалів: {e}")
+    else:
+        st.info("Історія чеків порожня, рейтинг матеріалів сформується після перших продажів.")
+
+    st.stop()
+
+# =========================================================================
+# АВТОРИЗАЦІЯ ХОСТА / АДМІНІСТРАТОРА (ПАНЕЛЬ ХОСТА)
 # =========================================================================
 if master_name.lower() in ["адмін", "хост"]:
     st.markdown("---")
@@ -143,7 +275,7 @@ if master_name.lower() in ["адмін", "хост"]:
 
         st.markdown("---")
         
-        # БЛОК 1: АНАЛІТИЧНИЙ ДАШБОРД ТА РЕЙТИНГ МАЙСТРІВ
+        # БЛОК 1: АНАЛІТИКА ТА РЕЙТИНГ МАЙСТРІВ
         st.subheader("📊 Аналітика та рейтинг успішності майстрів")
         history_file = "all_sales_history.xlsx"
         
@@ -151,7 +283,6 @@ if master_name.lower() in ["адмін", "хост"]:
             try:
                 xls = pd.ExcelFile(history_file)
                 all_masters_data = []
-                
                 for sheet in xls.sheet_names:
                     df_sh = pd.read_excel(history_file, sheet_name=sheet)
                     if not df_sh.empty and "Сума (грн)" in df_sh.columns:
@@ -160,13 +291,11 @@ if master_name.lower() in ["адмін", "хост"]:
                 
                 if all_masters_data:
                     df_all_sales = pd.concat(all_masters_data, ignore_index=True)
-                    
                     if "Час" in df_all_sales.columns:
                         df_all_sales["datetime_obj"] = pd.to_datetime(df_all_sales["Час"], errors='coerce')
                         df_all_sales["Дата"] = df_all_sales["datetime_obj"].dt.strftime("%Y-%m-%d")
                         
                         analytics_period = st.selectbox("📅 Оберіть період аналітики:", ["За весь час", "Сьогодні", "Тиждень", "Місяць"])
-                        
                         now_dt = datetime.now()
                         if analytics_period == "Сьогодні":
                             today_date_str = (now_dt + timedelta(hours=3)).strftime("%Y-%m-%d")
@@ -183,19 +312,14 @@ if master_name.lower() in ["адмін", "хост"]:
                         df_filtered_stat = df_all_sales
 
                     df_totals = df_filtered_stat[df_filtered_stat["Категорія"].astype(str).str.contains("ЗАГАЛОМ", case=False, na=False)]
-                    
                     if not df_totals.empty and "Майстер" in df_totals.columns and "Сума (грн)" in df_totals.columns:
                         df_totals["Сума (грн)"] = pd.to_numeric(df_totals["Сума (грн)"], errors='coerce').fillna(0)
-                        
                         rating_df = df_totals.groupby("Майстер").agg(
                             Заробіток=("Сума (грн)", "sum"),
                             Кількість_чеків=("№ чека", "nunique")
                         ).reset_index().sort_values(by="Заробіток", ascending=False)
-                        
                         st.markdown(f"### 🏆 Рейтинг майстрів ({analytics_period.lower()})")
                         st.dataframe(rating_df, use_container_width=True)
-                    else:
-                        st.info("Поки недостатньо даних за обраний період.")
             except Exception as e:
                 st.info(f"Помилка аналітики: {e}")
         else:
@@ -208,7 +332,6 @@ if master_name.lower() in ["адмін", "хост"]:
         clients_file = "clients_base.xlsx"
         if os.path.exists(clients_file):
             df_cl_view = load_clients_base()
-            
             search_query = st.text_input("🔍 Швидкий пошук клієнта (за ім'ям або телефоном):", placeholder="Введіть ім'я або цифри номера...")
             if search_query.strip():
                 query_lower = search_query.strip().lower()
@@ -216,7 +339,6 @@ if master_name.lower() in ["адмін", "хост"]:
                     df_cl_view["Ім'я"].astype(str).str.lower().str.contains(query_lower, na=False) | 
                     df_cl_view["Телефон"].astype(str).str.contains(query_lower, na=False)
                 ]
-            
             with open(clients_file, "rb") as f:
                 client_excel_bytes = f.read()
             st.download_button(
@@ -228,30 +350,16 @@ if master_name.lower() in ["адмін", "хост"]:
             st.dataframe(df_cl_view, use_container_width=True)
         else:
             st.info("Клієнтська база поки пуста.")
-            
-        st.subheader("📤 Завантажити оновлену базу клієнтів (Excel)")
-        uploaded_client_file = st.file_uploader("Оберіть файл `clients_base.xlsx`:", type=["xlsx"])
-        if uploaded_client_file is not None:
-            if st.button("💾 Застосувати та замінити базу на сервері"):
-                try:
-                    df_uploaded = pd.read_excel(uploaded_client_file)
-                    df_uploaded.to_excel(clients_file, index=False)
-                    st.success("🎉 Базу успішно оновлено! Сторінка перезапуститься.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Помилка: {e}")
 
         st.markdown("---")
         
         # БЛОК 3: ІСТОРІЯ, ЗВІТИ ТА ЗАХИЩЕНЕ ОЧИЩЕННЯ
         st.subheader("📁 Перегляд чеків та управління архівом")
         if os.path.exists(history_file):
-            
             if st.button("📊 Сформувати місячний звіт (зведений звіт за поточний місяць)"):
                 try:
                     xls_rep = pd.ExcelFile(history_file)
                     rep_totals = []
-                    
                     for sh in xls_rep.sheet_names:
                         df_sh = pd.read_excel(history_file, sheet_name=sh)
                         if not df_sh.empty and "Час" in df_sh.columns and "Сума (грн)" in df_sh.columns:
@@ -259,7 +367,6 @@ if master_name.lower() in ["адмін", "хост"]:
                             current_month = datetime.now().month
                             current_year = datetime.now().year
                             df_month = df_sh[(df_sh["datetime_obj"].dt.month == current_month) & (df_sh["datetime_obj"].dt.year == current_year)]
-                            
                             if not df_month.empty:
                                 df_check_totals = df_month[df_month["Категорія"].astype(str).str.contains("ЗАГАЛОМ", case=False, na=False)].copy()
                                 if not df_check_totals.empty:
@@ -270,25 +377,20 @@ if master_name.lower() in ["адмін", "хост"]:
                     
                     if rep_totals:
                         df_full_registry = pd.concat(rep_totals, ignore_index=True)
-                        
                         df_summary_masters = df_full_registry.groupby("Майстер").agg(
                             Кількість_чеків=("№ чека", "nunique"),
                             Загальна_виручка=("Сума чека (грн)", "sum")
                         ).reset_index()
-                        
                         total_row = pd.DataFrame([{
                             "Майстер": "ВСЬОГО ПО МАЙСТЕРНІ",
                             "Кількість_чеків": df_full_registry["№ чека"].nunique(),
                             "Загальна_виручка": df_full_registry["Сума чека (грн)"].sum()
                         }])
                         df_summary_masters = pd.concat([df_summary_masters, total_row], ignore_index=True)
-
                         report_filename = f"zvedeny_misyachny_zvit_{datetime.now().strftime('%Y_%m')}.xlsx"
-                        
                         with pd.ExcelWriter(report_filename, engine='openpyxl') as writer:
                             df_summary_masters.to_excel(writer, sheet_name="Звіт по майстрах", index=False)
                             df_full_registry.to_excel(writer, sheet_name="Реєстр чеків", index=False)
-
                         with open(report_filename, "rb") as rf:
                             st.download_button(
                                 label="📥 Завантажити зведений місячний звіт (.xlsx)",
@@ -303,44 +405,34 @@ if master_name.lower() in ["адмін", "хост"]:
                 except Exception as e:
                     st.error(f"Помилка формування звіту: {e}")
 
-            # ЗАХИЩЕНЕ ОЧИЩЕННЯ ІСТОРІЇ (ІЗ ПІДТВЕРДЖЕННЯМ ТА ПАРОЛЕМ)
             st.markdown("---")
             st.warning("⚠️ **Зона адміністратора:** Очищення історії чеків видалить усі дані назавжди.")
-            
             if not st.session_state.confirm_clear_history:
                 if st.button("🗑️ Очистити всю історію чеків"):
                     st.session_state.confirm_clear_history = True
                     st.rerun()
             else:
-                st.error("❗ УВАГА: Ви дійсно хочете видалити всі чеки? Цю дію неможливо скасувати!")
-                clear_pass = st.text_input("Введіть підтверджуючий пароль хоста для видалення:", type="password", key="clear_history_pass_input")
-                
+                st.error("❗ УВАГА: Ви дійсно хочете видалити всі чеки?")
+                clear_pass = st.text_input("Пароль адміністратора:", type="password", key="clear_history_pass_input")
                 col_c1, col_c2 = st.columns(2)
                 with col_c1:
-                    if st.button("🔴 ТАК, ВИДАЛИТИ НАЗАВЖДИ", type="primary"):
-                        if clear_pass == "1234": # Пароль для підтвердження видалення
+                    if st.button("🔴 ТАК, ВИДАЛИТИ", type="primary"):
+                        if clear_pass == "1234":
                             log_time = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
-                            log_msg = f"[{log_time}] АДМІНІСТРАТОР успішно очистив всю історію чеків.\n"
+                            log_msg = f"[{log_time}] АДМІНІСТРАТОР очистив всю історію чеків.\n"
                             with open("action_audit_log.txt", "a", encoding="utf-8") as log_file:
                                 log_file.write(log_msg)
-                            
                             os.remove(history_file)
                             st.session_state.confirm_clear_history = False
-                            st.success("Архів чеків успішно очищено!")
+                            st.success("Архів чеків очищено!")
                             st.rerun()
                         else:
-                            st.error("❌ Неправильний пароль підтвердження!")
+                            st.error("❌ Неправильний пароль!")
                 with col_c2:
                     if st.button("✖️ Скасувати"):
                         st.session_state.confirm_clear_history = False
                         st.rerun()
             
-            if os.path.exists("action_audit_log.txt"):
-                with open("action_audit_log.txt", "r", encoding="utf-8") as lf:
-                    log_contents = lf.read()
-                with st.expander("🔍 Переглянути журнал логів (аудит дій)"):
-                    st.text(log_contents)
-
             with open(history_file, "rb") as f:
                 excel_bytes = f.read()
             st.download_button(
@@ -356,17 +448,14 @@ if master_name.lower() in ["адмін", "хост"]:
                 selected_sheet = st.selectbox("👤 Оберіть аркуш майстра для перегляду:", sheet_names)
                 if selected_sheet:
                     df_sheet = pd.read_excel(history_file, sheet_name=selected_sheet)
-                    
                     if "Час" in df_sheet.columns and not df_sheet.empty:
                         df_sheet["Дата"] = pd.to_datetime(df_sheet["Час"], errors='coerce').dt.strftime("%Y-%m-%d")
                         available_dates = df_sheet["Дата"].dropna().unique().tolist()
                         available_dates.sort(reverse=True)
-                        
                         selected_date_filter = st.selectbox("📅 Фільтр чеків за датою:", ["Усі дати"] + available_dates)
                         if selected_date_filter != "Усі дати":
                             df_sheet = df_sheet[df_sheet["Дата"] == selected_date_filter]
                         df_sheet = df_sheet.drop(columns=["Дата"])
-                    
                     st.dataframe(df_sheet, use_container_width=True)
             except Exception as e:
                 st.info(f"Помилка: {e}")
@@ -618,6 +707,9 @@ if st.session_state.cart:
                         df_clients = df_clients.drop(columns=["ЧистийТелефон"])
                     df_clients.to_excel(clients_file, index=False)
                 
+                # --- АВТОМАТИЧНЕ СПИСАННЯ МАТЕРІАЛІВ ЗІ СКЛАДУ ПРИ ЗБЕРЕЖЕННІ ЧЕКА ---
+                update_warehouse_after_sale(st.session_state.cart)
+                
                 next_receipt_num = 1
                 if os.path.exists(history_file):
                     try:
@@ -665,7 +757,7 @@ if st.session_state.cart:
                     with pd.ExcelWriter(history_file, engine='openpyxl') as writer:
                         df_new.to_excel(writer, sheet_name=master_name, index=False)
                 
-                st.success(f"🎉 Чек №{next_receipt_num} збережено!")
+                st.success(f"🎉 Чек №{next_receipt_num} збережено, а матеріали автоматично списано зі складу!")
                 st.session_state.cart.clear()
                 st.rerun()
     with col2:
