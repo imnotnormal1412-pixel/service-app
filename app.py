@@ -135,7 +135,7 @@ if master_name.lower() in ["адмін", "хост"]:
 
         st.markdown("---")
         
-        # БЛОК 1: АНАЛІТИЧНИЙ ДАШБОРД ТА РЕЙТИНГ МАЙСТРІВ
+        # БЛОК 1: АНАЛІТИЧНИЙ ДАШБОРД ТА РЕЙТИНГ МАЙСТРІВ З ФІЛЬТРОМ ПЕРІОДУ
         st.subheader("📊 Аналітика та рейтинг успішності майстрів")
         history_file = "all_sales_history.xlsx"
         
@@ -153,13 +153,22 @@ if master_name.lower() in ["адмін", "хост"]:
                     df_all_sales = pd.concat(all_masters_data, ignore_index=True)
                     
                     if "Час" in df_all_sales.columns:
-                        df_all_sales["Дата"] = pd.to_datetime(df_all_sales["Час"], errors='coerce').dt.strftime("%Y-%m-%d")
-                        all_dates = df_all_sales["Дата"].dropna().unique().tolist()
-                        all_dates.sort(reverse=True)
+                        df_all_sales["datetime_obj"] = pd.to_datetime(df_all_sales["Час"], errors='coerce')
+                        df_all_sales["Дата"] = df_all_sales["datetime_obj"].dt.strftime("%Y-%m-%d")
                         
-                        selected_period = st.selectbox("📅 Оберіть період для аналітики:", ["Усі періоди"] + all_dates)
-                        if selected_period != "Усі періоди":
-                            df_filtered_stat = df_all_sales[df_all_sales["Дата"] == selected_period]
+                        # Вибір періоду аналітики
+                        analytics_period = st.selectbox("📅 Оберіть період аналітики:", ["За весь час", "Сьогодні", "Тиждень", "Місяць"])
+                        
+                        now_dt = datetime.now()
+                        if analytics_period == "Сьогодні":
+                            today_date_str = (now_dt + timedelta(hours=3)).strftime("%Y-%m-%d")
+                            df_filtered_stat = df_all_sales[df_all_sales["Дата"] == today_date_str]
+                        elif analytics_period == "Тиждень":
+                            week_ago = now_dt - timedelta(days=7)
+                            df_filtered_stat = df_all_sales[df_all_sales["datetime_obj"] >= week_ago]
+                        elif analytics_period == "Місяць":
+                            month_ago = now_dt - timedelta(days=30)
+                            df_filtered_stat = df_all_sales[df_all_sales["datetime_obj"] >= month_ago]
                         else:
                             df_filtered_stat = df_all_sales
                     else:
@@ -173,10 +182,10 @@ if master_name.lower() in ["адмін", "хост"]:
                             Кількість_чеків=("№ чека", "nunique")
                         ).reset_index().sort_values(by="Заробіток", ascending=False)
                         
-                        st.markdown("### 🏆 Рейтинг майстрів")
+                        st.markdown(f"### 🏆 Рейтинг майстрів ({analytics_period.lower()})")
                         st.dataframe(rating_df, use_container_width=True)
                     else:
-                        st.info("Поки недостатньо даних для побудови рейтингу.")
+                        st.info("Поки недостатньо даних за обраний період.")
             except Exception as e:
                 st.info(f"Помилка аналітики: {e}")
         else:
@@ -218,7 +227,7 @@ if master_name.lower() in ["адмін", "хост"]:
 
         st.markdown("---")
         
-        # БЛОК 3: ІСТОРІЯ ТА ПЕРЕГЛЯД ЧЕКІВ МАЙСТРІВ
+        # БЛОК 3: ІСТОРІЯ ТА ПЕРЕГЛЯД ЧЕКІВ МАЙСТРІВ З ФІЛЬТРОМ ЗА ДАТОЮ
         st.subheader("📁 Перегляд чеків та управління архівом")
         if os.path.exists(history_file):
             if st.button("🗑️ Очистити всю історію чеків"):
@@ -241,6 +250,18 @@ if master_name.lower() in ["адмін", "хост"]:
                 selected_sheet = st.selectbox("👤 Оберіть аркуш майстра для перегляду:", sheet_names)
                 if selected_sheet:
                     df_sheet = pd.read_excel(history_file, sheet_name=selected_sheet)
+                    
+                    # Додаємо фільтрацію за датами для перегляду чеків майстра
+                    if "Час" in df_sheet.columns and not df_sheet.empty:
+                        df_sheet["Дата"] = pd.to_datetime(df_sheet["Час"], errors='coerce').dt.strftime("%Y-%m-%d")
+                        available_dates = df_sheet["Дата"].dropna().unique().tolist()
+                        available_dates.sort(reverse=True)
+                        
+                        selected_date_filter = st.selectbox("📅 Фільтр чеків за датою:", ["Усі дати"] + available_dates)
+                        if selected_date_filter != "Усі дати":
+                            df_sheet = df_sheet[df_sheet["Дата"] == selected_date_filter]
+                        df_sheet = df_sheet.drop(columns=["Дата"])
+                    
                     st.dataframe(df_sheet, use_container_width=True)
             except Exception as e:
                 st.info(f"Помилка: {e}")
