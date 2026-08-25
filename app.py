@@ -7,14 +7,8 @@ import pandas as pd
 # 1. НАЛАШТУВАННЯ ТА СПИСКИ (МАЙСТРИ, ПОСЛУГИ, ЦІНИ, ЗНИЖКИ)
 # =========================================================================
 
-# СПИСОК ДОЗВОЛЕНИХ МАЙСТРІВ (WHITE LIST)
-# -------------------------------------------------------------------------
-# Сюди можна додати спеціальні слова для входу в панель хоста (наприклад, "Адмін", "Хост")
 ALLOWED_MASTERS = ["Микола", "Олена", "Тато", "Адмін", "Хост"]
 
-
-# БАЗА ПОСЛУГ, МАТЕРІАЛІВ ТА ЗНИЖОК
-# -------------------------------------------------------------------------
 if 'services' not in st.session_state:
     st.session_state.services = {
         # --- Послуги ---
@@ -56,11 +50,11 @@ def load_clients_base():
     
     if os.path.exists(clients_file):
         try:
-            df = pd.read_excel(clients_file, dtype=str) # Читаємо все одразу як текст!
+            df = pd.read_excel(clients_file, dtype=str)
             
-            # Примусово очищаємо телефон від зайвих .0 та пробілів
+            # Примусово переводимо телефон у текст і прибираємо крапки (.0)
             if "Телефон" in df.columns:
-                df["Телефон"] = df["Телефон"].str.split('.').str[0].str.strip()
+                df["Телефон"] = df["Телефон"].astype(str).str.split('.').str[0].str.strip()
             
             if "Коментар клієнта" in df.columns and "Коментар майстра" not in df.columns:
                 df = df.rename(columns={"Коментар клієнта": "Коментар майстра"})
@@ -79,6 +73,7 @@ def load_clients_base():
             pass
     
     return pd.DataFrame(columns=expected_columns)
+
 # =========================================================================
 # 3. ІНТЕРФЕЙС ТА АВТОРИЗАЦІЯ
 # =========================================================================
@@ -122,7 +117,7 @@ if master_name.lower() in ["адмін", "хост"]:
             st.rerun()
 
     if enter_admin:
-        if admin_password == "1234": # Зміни пароль тут за потреби
+        if admin_password == "1234":
             st.session_state.host_authenticated = True
         else:
             st.error("❌ Неправильний пароль!")
@@ -138,7 +133,7 @@ if master_name.lower() in ["адмін", "хост"]:
 
         st.markdown("---")
         
-        # БЛОК 1: АНАЛІТИЧНИЙ ДАШБОРД ТА РЕЙТИНГ МАЙСТРІВ З ФІЛЬТРОМ ПЕРІОДУ
+        # БЛОК 1: АНАЛІТИЧНИЙ ДАШБОРД ТА РЕЙТИНГ МАЙСТРІВ
         st.subheader("📊 Аналітика та рейтинг успішності майстрів")
         history_file = "all_sales_history.xlsx"
         
@@ -159,7 +154,6 @@ if master_name.lower() in ["адмін", "хост"]:
                         df_all_sales["datetime_obj"] = pd.to_datetime(df_all_sales["Час"], errors='coerce')
                         df_all_sales["Дата"] = df_all_sales["datetime_obj"].dt.strftime("%Y-%m-%d")
                         
-                        # Вибір періоду аналітики
                         analytics_period = st.selectbox("📅 Оберіть період аналітики:", ["За весь час", "Сьогодні", "Тиждень", "Місяць"])
                         
                         now_dt = datetime.now()
@@ -230,7 +224,7 @@ if master_name.lower() in ["адмін", "хост"]:
 
         st.markdown("---")
         
-        # БЛОК 3: ІСТОРІЯ ТА ПЕРЕГЛЯД ЧЕКІВ МАЙСТРІВ З ФІЛЬТРОМ ЗА ДАТОЮ
+        # БЛОК 3: ІСТОРІЯ ТА ПЕРЕГЛЯД ЧЕКІВ
         st.subheader("📁 Перегляд чеків та управління архівом")
         if os.path.exists(history_file):
             if st.button("🗑️ Очистити всю історію чеків"):
@@ -254,7 +248,6 @@ if master_name.lower() in ["адмін", "хост"]:
                 if selected_sheet:
                     df_sheet = pd.read_excel(history_file, sheet_name=selected_sheet)
                     
-                    # Додаємо фільтрацію за датами для перегляду чеків майстра
                     if "Час" in df_sheet.columns and not df_sheet.empty:
                         df_sheet["Дата"] = pd.to_datetime(df_sheet["Час"], errors='coerce').dt.strftime("%Y-%m-%d")
                         available_dates = df_sheet["Дата"].dropna().unique().tolist()
@@ -284,7 +277,6 @@ with col_user2:
         st.session_state.logged_in_master = ""
         st.rerun()
 
-# Статистика за сьогодні
 history_file = "all_sales_history.xlsx"
 today_str = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d")
 today_receipts_count = 0
@@ -315,7 +307,6 @@ with col_stat2:
 
 st.markdown("---")
 
-# Вибір послуг та оформлення чека
 categories = ["Послуги", "Матеріали", "Інше", "Знижки"]
 selected_category = st.selectbox("Оберіть категорію:", categories)
 
@@ -421,11 +412,20 @@ if st.session_state.cart:
         entered_phone = st.text_input("📞 Номер телефону клієнта:", placeholder="0681234567")
         if entered_phone.strip():
             clean_input_digits = "".join(filter(str.isdigit, entered_phone.strip()))
-            target_search_phone = f"380{clean_input_digits[1:]}" if clean_input_digits.startswith("0") else f"380{clean_input_digits}"
+            
+            # Стандартизуємо введений номер до формату 380...
+            if clean_input_digits.startswith("380"):
+                target_search_phone = clean_input_digits
+            elif clean_input_digits.startswith("0"):
+                target_search_phone = f"380{clean_input_digits[1:]}"
+            else:
+                target_search_phone = f"380{clean_input_digits}"
             
             df_check = load_clients_base()
             if not df_check.empty and "Телефон" in df_check.columns:
+                # Робимо цифрову копію телефону в базі для надійного порівняння без розбіжностей
                 df_check["ЧистийТелефон"] = df_check["Телефон"].astype(str).apply(lambda x: "".join(filter(str.isdigit, x)))
+                
                 match = df_check[df_check["ЧистийТелефон"] == target_search_phone]
                 if not match.empty:
                     is_existing_client = True
