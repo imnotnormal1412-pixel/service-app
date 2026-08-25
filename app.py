@@ -150,87 +150,106 @@ if not st.session_state.logged_in_master:
 master_name = st.session_state.logged_in_master
 
 # =========================================================================
-# АВТОРИЗАЦІЯ ПАНЕЛІ "СКЛАД / ІНВЕНТАРИЗАЦІЯ"
+# АВТОРИЗАЦІЯ ПАНЕЛІ "СКЛАД / ІНВЕНТАРИЗАЦІЯ" (ІЗ ПАРОЛЕМ)
 # =========================================================================
 if master_name.lower() == "склад":
     st.markdown("---")
-    st.subheader("📦 Панель управління складом та залишками")
+    st.subheader("🛡️ Авторизація Панелі Складу")
+    warehouse_password = st.text_input("Введіть секретний пароль доступу до складу:", type="password")
     
-    col_w1, col_w2 = st.columns(2)
-    with col_w1:
-        if st.button("⬅️ Повернутися до вибору користувача"):
+    col_w_back1, col_w_back2 = st.columns(2)
+    with col_w_back1:
+        enter_warehouse = st.button("Увійти в Панель складу", type="primary")
+    with col_w_back2:
+        if st.button("⬅️ Вийти / Змінити користувача"):
             st.session_state.logged_in_master = ""
             st.rerun()
-    with col_w2:
-        if st.button("🔄 Оновити дані складу"):
-            st.cache_data.clear()
-            st.rerun()
 
-    st.markdown("---")
-    
-    # 1. ТАБЛИЦЯ ЗАЛИШКІВ ІЗ СВІТЛОФОРОМ
-    st.subheader("📋 Поточні залишки матеріалів на полицях")
-    df_stock_view = load_warehouse_stock()
-    
-    # Додаємо статусне забарвлення залишків
-    def stock_status(qty):
-        if qty <= 1:
-            return "🔴 КРИТИЧНО (Треба докупити!)"
-        elif qty <= 4:
-            return "🟡 Закінчується"
+    if enter_warehouse:
+        if warehouse_password == "1234":
+            st.session_state.warehouse_authenticated = True
         else:
-            return "🟢 Достатньо"
-            
-    df_stock_view["Статус"] = df_stock_view["Залишок (шт)"].apply(stock_status)
-    st.dataframe(df_stock_view, use_container_width=True)
-    
-    # 2. ФОРМА ПОПОВНЕННЯ СКЛАДУ (ПРИХІД ТОВАРУ)
-    st.markdown("---")
-    st.subheader("➕ Поповнити склад (Прихід партії)")
-    with st.form("restock_form"):
-        mat_to_restock = st.selectbox("Оберіть матеріал для поповнення:", df_stock_view["Матеріал"].tolist())
-        qty_added = st.number_input("Кількість од. для додавання:", min_value=1, value=10, step=1)
-        submit_restock = st.form_submit_button("Збільшити залишок на складі", type="primary")
-        
-        if submit_restock:
-            idx = df_stock_view[df_stock_view["Матеріал"] == mat_to_restock].index[0]
-            current_val = int(df_stock_view.loc[idx, "Залишок (шт)"])
-            df_stock_view.loc[idx, "Залишок (шт)"] = current_val + int(qty_added)
-            df_stock_view.to_excel("warehouse_stock.xlsx", index=False)
-            st.success(f"🎉 Склад успішно поповнено! Додано {qty_added} шт. до «{mat_to_restock}».")
-            st.rerun()
+            st.error("❌ Неправильний пароль!")
+            st.session_state.warehouse_authenticated = False
 
-    # 3. РЕЙТИНГ ПОПУЛЯРНОСТІ МАТЕРІАЛІВ
-    st.markdown("---")
-    st.subheader("🏆 Рейтинг популярності матеріалів (Списання)")
-    history_file = "all_sales_history.xlsx"
-    if os.path.exists(history_file):
-        try:
-            xls = pd.ExcelFile(history_file)
-            all_history_sheets = []
-            for sh in xls.sheet_names:
-                df_sh = pd.read_excel(history_file, sheet_name=sh)
-                if not df_sh.empty and "Категорія" in df_sh.columns:
-                    all_history_sheets.append(df_sh)
-            
-            if all_history_sheets:
-                df_all_h = pd.concat(all_history_sheets, ignore_index=True)
-                df_materials_only = df_all_h[df_all_h["Категорія"] == "Матеріали"]
+    if st.session_state.get("warehouse_authenticated", False):
+        st.success("✅ Вітаємо в Панелі Складу!")
+        
+        col_w1, col_w2 = st.columns([2, 1])
+        with col_w1:
+            if st.button("⬅️ Повернутися до оформлення чеку"):
+                st.session_state.logged_in_master = ""
+                st.session_state.warehouse_authenticated = False
+                st.rerun()
+        with col_w2:
+            if st.button("🔄 Оновити дані складу"):
+                st.cache_data.clear()
+                st.rerun()
+
+        st.markdown("---")
+        
+        # 1. ТАБЛИЦЯ ЗАЛИШКІВ ІЗ СВІТЛОФОРОМ
+        st.subheader("📋 Поточні залишки матеріалів на полицях")
+        df_stock_view = load_warehouse_stock()
+        
+        def stock_status(qty):
+            if qty <= 1:
+                return "🔴 КРИТИЧНО (Треба докупити!)"
+            elif qty <= 4:
+                return "🟡 Закінчується"
+            else:
+                return "🟢 Достатньо"
                 
-                if not df_materials_only.empty and "Послуга/Позиція" in df_materials_only.columns and "Кількість" in df_materials_only.columns:
-                    df_materials_only["Кількість"] = pd.to_numeric(df_materials_only["Кількість"], errors='coerce').fillna(1)
-                    mat_rating = df_materials_only.groupby("Послуга/Позиція").agg(
-                        Всього_списано=("Кількість", "sum"),
-                        Кількість_продажів=("№ чека", "count")
-                    ).reset_index().sort_values(by="Всього_списано", ascending=False)
+        df_stock_view["Статус"] = df_stock_view["Залишок (шт)"].apply(stock_status)
+        st.dataframe(df_stock_view, use_container_width=True)
+        
+        # 2. ФОРМА ПОПОВНЕННЯ СКЛАДУ (ПРИХІД ТОВАРУ)
+        st.markdown("---")
+        st.subheader("➕ Поповнити склад (Прихід партії)")
+        with st.form("restock_form"):
+            mat_to_restock = st.selectbox("Оберіть матеріал для поповнення:", df_stock_view["Матеріал"].tolist())
+            qty_added = st.number_input("Кількість од. для додавання:", min_value=1, value=10, step=1)
+            submit_restock = st.form_submit_button("Збільшити залишок на складі", type="primary")
+            
+            if submit_restock:
+                idx = df_stock_view[df_stock_view["Матеріал"] == mat_to_restock].index[0]
+                current_val = int(df_stock_view.loc[idx, "Залишок (шт)"])
+                df_stock_view.loc[idx, "Залишок (шт)"] = current_val + int(qty_added)
+                df_stock_view.to_excel("warehouse_stock.xlsx", index=False)
+                st.success(f"🎉 Склад успішно поповнено! Додано {qty_added} шт. до «{mat_to_restock}».")
+                st.rerun()
+
+        # 3. РЕЙТИНГ ПОПУЛЯРНОСТІ МАТЕРІАЛІВ
+        st.markdown("---")
+        st.subheader("🏆 Рейтинг популярності матеріалів (Списання)")
+        history_file = "all_sales_history.xlsx"
+        if os.path.exists(history_file):
+            try:
+                xls = pd.ExcelFile(history_file)
+                all_history_sheets = []
+                for sh in xls.sheet_names:
+                    df_sh = pd.read_excel(history_file, sheet_name=sh)
+                    if not df_sh.empty and "Категорія" in df_sh.columns:
+                        all_history_sheets.append(df_sh)
+                
+                if all_history_sheets:
+                    df_all_h = pd.concat(all_history_sheets, ignore_index=True)
+                    df_materials_only = df_all_h[df_all_h["Категорія"] == "Матеріали"]
                     
-                    st.dataframe(mat_rating, use_container_width=True)
-                else:
-                    st.info("Поки немає даних про списання матеріалів в чеках.")
-        except Exception as e:
-            st.info(f"Помилка формування рейтингу матеріалів: {e}")
-    else:
-        st.info("Історія чеків порожня, рейтинг матеріалів сформується після перших продажів.")
+                    if not df_materials_only.empty and "Послуга/Позиція" in df_materials_only.columns and "Кількість" in df_materials_only.columns:
+                        df_materials_only["Кількість"] = pd.to_numeric(df_materials_only["Кількість"], errors='coerce').fillna(1)
+                        mat_rating = df_materials_only.groupby("Послуга/Позиція").agg(
+                            Всього_списано=("Кількість", "sum"),
+                            Кількість_продажів=("№ чека", "count")
+                        ).reset_index().sort_values(by="Всього_списано", ascending=False)
+                        
+                        st.dataframe(mat_rating, use_container_width=True)
+                    else:
+                        st.info("Поки немає даних про списання матеріалів в чеках.")
+            except Exception as e:
+                st.info(f"Помилка формування рейтингу матеріалів: {e}")
+        else:
+            st.info("Історія чеків порожня, рейтинг матеріалів сформується після перших продажів.")
 
     st.stop()
 
