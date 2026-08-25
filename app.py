@@ -42,7 +42,7 @@ if 'cart' not in st.session_state:
     st.session_state.cart = []
 
 # =========================================================================
-# 2. РОБОТА З БАЗОЮ КЛІЄНТІВ (ФАЙЛ clients_base.xlsx)
+# 2. РОБОТА З БАЗОЮ КЛІЄНТІВ ТА ІСТОРІЄЮ
 # =========================================================================
 
 def load_clients_base():
@@ -89,9 +89,8 @@ if not st.session_state.logged_in_master:
         submit_login = st.form_submit_button("Увійти в систему", type="primary")
         
         if submit_login:
-            clean_name = entered_name.strip().capitalize() # Приводимо до єдиного формату (перша велика)
+            clean_name = entered_name.strip().capitalize()
             if any(clean_name.lower() == m.lower() for m in ALLOWED_MASTERS):
-                # Знаходимо точну канонічну назву майстра з ALLOWED_MASTERS
                 exact_master_name = next(m for m in ALLOWED_MASTERS if m.lower() == clean_name.lower())
                 st.session_state.logged_in_master = exact_master_name
                 st.rerun()
@@ -140,17 +139,20 @@ if master_name.lower() in ["адмін", "хост"]:
 
         st.markdown("---")
         
-        # БЛОК 1: АНАЛІТИЧНИЙ ДАШБОРД ТА РЕЙТИНГ МАЙСТРІВ
+        # БЛОК 1: АНАЛІТИЧНИЙ ДАШБОРД ТА РЕЙТИНГ МАЙСТРІВ (ПОКРАЩЕНИЙ ЗБІР ДАНИХ)
         st.subheader("📊 Аналітика та рейтинг успішності майстрів")
         history_file = "all_sales_history.xlsx"
         
         if os.path.exists(history_file):
             try:
+                # Читаємо файл без кешування, щоб бачити найсвіжіші рядки
                 xls = pd.ExcelFile(history_file)
                 all_masters_data = []
+                
                 for sheet in xls.sheet_names:
+                    # Пропускаємо технічні аркуші, якщо вони є, читаємо тільки майстрів
                     df_sh = pd.read_excel(history_file, sheet_name=sheet)
-                    if not df_sh.empty:
+                    if not df_sh.empty and "Сума (грн)" in df_sh.columns:
                         df_sh["Майстер_Аркуш"] = sheet
                         all_masters_data.append(df_sh)
                 
@@ -178,9 +180,13 @@ if master_name.lower() in ["адмін", "хост"]:
                     else:
                         df_filtered_stat = df_all_sales
 
-                    df_totals = df_filtered_stat[df_filtered_stat["Категорія"] == "--- ЗАГАЛОМ ЗА ЧЕК ---"]
+                    # Шукаємо рядки підсумків чеків
+                    df_totals = df_filtered_stat[df_filtered_stat["Категорія"].astype(str).str.contains("ЗАГАЛОМ", case=False, na=False)]
                     
                     if not df_totals.empty and "Майстер" in df_totals.columns and "Сума (грн)" in df_totals.columns:
+                        # Приводимо суму до числа на випадок текстового формату
+                        df_totals["Сума (грн)"] = pd.to_numeric(df_totals["Сума (грн)"], errors='coerce').fillna(0)
+                        
                         rating_df = df_totals.groupby("Майстер").agg(
                             Заробіток=("Сума (грн)", "sum"),
                             Кількість_чеків=("№ чека", "nunique")
@@ -300,9 +306,9 @@ if os.path.exists(history_file):
                 if not df_today.empty:
                     if "№ чека" in df_today.columns:
                         today_receipts_count = df_today["№ чека"].nunique()
-                    df_totals_today = df_today[df_today["Категорія"] == "--- ЗАГАЛОМ ЗА ЧЕК ---"]
+                    df_totals_today = df_today[df_today["Категорія"].astype(str).str.contains("ЗАГАЛОМ", case=False, na=False)]
                     if not df_totals_today.empty:
-                        today_revenue = df_totals_today["Сума (грн)"].sum()
+                        today_revenue = pd.to_numeric(df_totals_today["Сума (грн)"], errors='coerce').sum()
     except Exception:
         pass
 
@@ -541,10 +547,8 @@ if st.session_state.cart:
                 
                 df_new = pd.DataFrame(new_rows)
                 
-                # --- ІДЕАЛЬНЕ ЗБЕРЕЖЕННЯ В АРКУШ МАЙСТРА БЕЗ ДУБЛЮВАННЯ ---
                 if os.path.exists(history_file):
                     xls_check = pd.ExcelFile(history_file)
-                    # Шукаємо, чи є вже аркуш з таким самим іменем (ігноруючи регістр)
                     existing_sheet = next((sh for sh in xls_check.sheet_names if sh.lower() == master_name.lower()), None)
                     target_sheet_name = existing_sheet if existing_sheet else master_name
 
