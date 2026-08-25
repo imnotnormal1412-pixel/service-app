@@ -204,7 +204,6 @@ if master_name.lower() in ["адмін", "хост"]:
         if os.path.exists(clients_file):
             df_cl_view = load_clients_base()
             
-            # Швидкий пошук по клієнтах
             search_query = st.text_input("🔍 Швидкий пошук клієнта (за ім'ям або телефоном):", placeholder="Введіть ім'я або цифри номера...")
             if search_query.strip():
                 query_lower = search_query.strip().lower()
@@ -243,42 +242,69 @@ if master_name.lower() in ["адмін", "хост"]:
         st.subheader("📁 Перегляд чеків та управління архівом")
         if os.path.exists(history_file):
             
-            # Кнопка формування місячного звіту
-            if st.button("📊 Сформувати місячний звіт (за поточний місяць)"):
+            # НОВИЙ ФОРМАТ МІСЯЧНОГО ЗВІТУ (ЗВЕДЕНИЙ ТА КОМПАКТНИЙ)
+            if st.button("📊 Сформувати місячний звіт (зведений звіт за поточний місяць)"):
                 try:
                     xls_rep = pd.ExcelFile(history_file)
-                    rep_data = []
+                    rep_totals = []
+                    
                     for sh in xls_rep.sheet_names:
                         df_sh = pd.read_excel(history_file, sheet_name=sh)
-                        if not df_sh.empty and "Час" in df_sh.columns:
+                        if not df_sh.empty and "Час" in df_sh.columns and "Сума (грн)" in df_sh.columns:
                             df_sh["datetime_obj"] = pd.to_datetime(df_sh["Час"], errors='coerce')
                             current_month = datetime.now().month
                             current_year = datetime.now().year
                             df_month = df_sh[(df_sh["datetime_obj"].dt.month == current_month) & (df_sh["datetime_obj"].dt.year == current_year)]
+                            
                             if not df_month.empty:
-                                df_month["Майстер"] = sh
-                                rep_data.append(df_month.drop(columns=["datetime_obj"]))
+                                # Витягуємо тільки рядки підсумків чеків для чистого реєстру
+                                df_check_totals = df_month[df_month["Категорія"].astype(str).str.contains("ЗАГАЛОМ", case=False, na=False)].copy()
+                                if not df_check_totals.empty:
+                                    df_check_totals["Майстер"] = sh
+                                    df_check_totals["Дата"] = df_check_totals["datetime_obj"].dt.strftime("%Y-%m-%d")
+                                    # Обираємо головні колонки для компактного реєстру
+                                    clean_registry = df_check_totals[["Дата", "Майстер", "№ чека", "Ім'я клієнта", "Сума (грн)"]].rename(columns={"Сума (грн)": "Сума чека (грн)"})
+                                    rep_totals.append(clean_registry)
                     
-                    if rep_data:
-                        df_monthly_report = pd.concat(rep_data, ignore_index=True)
-                        report_filename = f"misyachny_zvit_{datetime.now().strftime('%Y_%m')}.xlsx"
-                        df_monthly_report.to_excel(report_filename, index=False)
+                    if rep_totals:
+                        df_full_registry = pd.concat(rep_totals, ignore_index=True)
+                        
+                        # Формуємо зведену таблицю по майстрах
+                        df_summary_masters = df_full_registry.groupby("Майстер").agg(
+                            Кількість_чеків=("№ чека", "nunique"),
+                            Загальна_виручка=("Сума чека (грн)", "sum")
+                        ).reset_index()
+                        
+                        # Додаємо рядок "ВСЬОГО" в кінці зведеної таблиці
+                        total_row = pd.DataFrame([{
+                            "Майстер": "ВСЬОГО ПО МАЙСТЕРНІ",
+                            "Кількість_чеків": df_full_registry["№ чека"].nunique(),
+                            "Загальна_виручка": df_full_registry["Сума чека (грн)"].sum()
+                        }])
+                        df_summary_masters = pd.concat([df_summary_masters, total_row], ignore_index=True)
+
+                        report_filename = f"zvedeny_misyachny_zvit_{datetime.now().strftime('%Y_%m')}.xlsx"
+                        
+                        # Зберігаємо в файл з двома окремими вкладками (аркушами)
+                        with pd.ExcelWriter(report_filename, engine='openpyxl') as writer:
+                            df_summary_masters.to_excel(writer, sheet_name="Звіт по майстрах", index=False)
+                            df_full_registry.to_excel(writer, sheet_name="Реєстр чеків", index=False)
+
                         with open(report_filename, "rb") as rf:
                             st.download_button(
-                                label="📥 Завантажити місячний звіт (.xlsx)",
+                                label="📥 Завантажити зведений місячний звіт (.xlsx)",
                                 data=rf.read(),
                                 file_name=report_filename,
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                 type="primary"
                             )
-                        st.success("🎉 Місячний звіт успішно сформовано!")
+                        st.success("🎉 Зведений місячний звіт успішно сформовано (2 вкладки: зведення та реєстр)!")
                     else:
                         st.warning("⚠️ За поточний місяць ще немає збережених чеків.")
                 except Exception as e:
                     st.error(f"Помилка формування звіту: {e}")
 
             if st.button("🗑️ Очистити всю історію чеків"):
-                # Логування дій (додаємо службовий запис перед видаленням)
                 log_time = (datetime.now() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
                 log_msg = f"[{log_time}] АДМІНІСТРАТОР очистив всю історію чеків.\n"
                 with open("action_audit_log.txt", "a", encoding="utf-8") as log_file:
@@ -288,7 +314,6 @@ if master_name.lower() in ["адмін", "хост"]:
                 st.success("Архів чеків успішно очищено! Дюжу зафіксовано в логах.")
                 st.rerun()
             
-            # Кнопка перегляду логів аудиту (на випадок перевірки форс-мажорів)
             if os.path.exists("action_audit_log.txt"):
                 with open("action_audit_log.txt", "r", encoding="utf-8") as lf:
                     log_contents = lf.read()
