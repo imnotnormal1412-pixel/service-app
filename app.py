@@ -346,11 +346,12 @@ if master_name.lower() in ["адмін", "хост"]:
 
         st.markdown("---")
         
-        # БЛОК 2: КЛІЄНТСЬКА БАЗА ЗІ ШВИДКИМ ПОШУКОМ
+# БЛОК 2: КЛІЄНТСЬКА БАЗА (З ПОШУКОМ ТА ЗАВАНТАЖЕННЯМ)
         st.subheader("👥 Клієнтська база")
         clients_file = "clients_base.xlsx"
         if os.path.exists(clients_file):
             df_cl_view = load_clients_base()
+            
             search_query = st.text_input("🔍 Швидкий пошук клієнта (за ім'ям або телефоном):", placeholder="Введіть ім'я або цифри номера...")
             if search_query.strip():
                 query_lower = search_query.strip().lower()
@@ -358,6 +359,7 @@ if master_name.lower() in ["адмін", "хост"]:
                     df_cl_view["Ім'я"].astype(str).str.lower().str.contains(query_lower, na=False) | 
                     df_cl_view["Телефон"].astype(str).str.contains(query_lower, na=False)
                 ]
+            
             with open(clients_file, "rb") as f:
                 client_excel_bytes = f.read()
             st.download_button(
@@ -369,8 +371,19 @@ if master_name.lower() in ["адмін", "хост"]:
             st.dataframe(df_cl_view, use_container_width=True)
         else:
             st.info("Клієнтська база поки пуста.")
-
-        st.markdown("---")
+            
+        # Повертаємо завантажувач файлу бази на сервер
+        st.subheader("📤 Завантажити оновлену базу клієнтів (Excel)")
+        uploaded_client_file = st.file_uploader("Оберіть файл `clients_base.xlsx`:", type=["xlsx"])
+        if uploaded_client_file is not None:
+            if st.button("💾 Застосувати та замінити базу на сервері"):
+                try:
+                    df_uploaded = pd.read_excel(uploaded_client_file)
+                    df_uploaded.to_excel(clients_file, index=False)
+                    st.success("🎉 Базу успішно оновлено! Сторінка перезапуститься.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Помилка: {e}")
         
         # БЛОК 3: ІСТОРІЯ, ЗВІТИ ТА ЗАХИЩЕНЕ ОЧИЩЕННЯ
         st.subheader("📁 Перегляд чеків та управління архівом")
