@@ -43,6 +43,10 @@ if 'cart' not in st.session_state:
 if 'confirm_clear_history' not in st.session_state:
     st.session_state.confirm_clear_history = False
 
+# Стан для тимчасового перехоплення додавання товару при нестачі на складі
+if 'pending_split_item' not in st.session_state:
+    st.session_state.pending_split_item = None
+
 # =========================================================================
 # 2. РОБОТА З БАЗОЮ КЛІЄНТІВ, СКЛАДОМ ТА ІСТОРІЄЮ
 # =========================================================================
@@ -77,15 +81,13 @@ def load_clients_base():
 
 def load_warehouse_stock():
     warehouse_file = "warehouse_stock.xlsx"
-    # Витягуємо всі матеріали зі списку послуг автоматично
-    materials_list = [name for name, data in st.session_state.services.items() if data["category"] == "Матеріали"]
+    materials_list = [name for name, data in st.session_state.services.items() if data["category"] == "Матеріали" and "(склад)" in name.lower()]
     
     if os.path.exists(warehouse_file):
         try:
             df = pd.read_excel(warehouse_file, dtype=str)
             df["Залишок (шт)"] = pd.to_numeric(df["Залишок (шт)"], errors='coerce').fillna(15).astype(int)
             
-            # Перевіряємо, чи з'явилися нові матеріали у системі, яких ще немає в Excel
             existing_materials = df["Матеріал"].tolist()
             new_rows = []
             for mat in materials_list:
@@ -98,7 +100,6 @@ def load_warehouse_stock():
         except Exception:
             pass
     
-    # Створюємо файл складу з початковими залишками (по 15 шт кожної позиції)
     initial_data = [{"Матеріал": mat, "Залишок (шт)": 15} for mat in materials_list]
     df = pd.DataFrame(initial_data)
     df.to_excel(warehouse_file, index=False)
@@ -109,7 +110,7 @@ def update_warehouse_after_sale(cart_items):
     df_stock = load_warehouse_stock()
     
     for item in cart_items:
-        if item["category"] == "Матеріали":
+        if item["category"] == "Матеріали" and "(склад)" in item["name"].lower():
             mat_name = item["name"]
             sold_qty = item["qty"]
             if mat_name in df_stock["Матеріал"].values:
@@ -137,7 +138,6 @@ if not st.session_state.logged_in_master:
         
         if submit_login:
             clean_name = entered_name.strip().capitalize()
-            # Дозволяємо вхід також для "Склад"
             allowed_check = ALLOWED_MASTERS + ["Склад"]
             if any(clean_name.lower() == m.lower() for m in allowed_check):
                 exact_name = next(m for m in allowed_check if m.lower() == clean_name.lower())
@@ -188,7 +188,6 @@ if master_name.lower() == "склад":
 
         st.markdown("---")
         
-        # 1. ТАБЛИЦЯ ЗАЛИШКІВ ІЗ СВІТЛОФОРОМ
         st.subheader("📋 Поточні залишки матеріалів на полицях")
         df_stock_view = load_warehouse_stock()
         
@@ -203,7 +202,6 @@ if master_name.lower() == "склад":
         df_stock_view["Статус"] = df_stock_view["Залишок (шт)"].apply(stock_status)
         st.dataframe(df_stock_view, use_container_width=True)
         
-        # 2. ФОРМА ПОПОВНЕННЯ СКЛАДУ (ПРИХІД ТОВАРУ)
         st.markdown("---")
         st.subheader("➕ Поповнити склад (Прихід партії)")
         with st.form("restock_form"):
@@ -219,7 +217,6 @@ if master_name.lower() == "склад":
                 st.success(f"🎉 Склад успішно поповнено! Додано {qty_added} шт. до «{mat_to_restock}».")
                 st.rerun()
 
-        # 3. РЕЙТИНГ ПОПУЛЯРНОСТІ МАТЕРІАЛІВ
         st.markdown("---")
         st.subheader("🏆 Рейтинг популярності матеріалів (Списання)")
         history_file = "all_sales_history.xlsx"
@@ -294,7 +291,6 @@ if master_name.lower() in ["адмін", "хост"]:
 
         st.markdown("---")
         
-        # БЛОК 1: АНАЛІТИКА ТА РЕЙТИНГ МАЙСТРІВ
         st.subheader("📊 Аналітика та рейтинг успішності майстрів")
         history_file = "all_sales_history.xlsx"
         
@@ -346,12 +342,10 @@ if master_name.lower() in ["адмін", "хост"]:
 
         st.markdown("---")
         
-# БЛОК 2: КЛІЄНТСЬКА БАЗА (З ПОШУКОМ ТА ЗАВАНТАЖЕННЯМ)
         st.subheader("👥 Клієнтська база")
         clients_file = "clients_base.xlsx"
         if os.path.exists(clients_file):
             df_cl_view = load_clients_base()
-            
             search_query = st.text_input("🔍 Швидкий пошук клієнта (за ім'ям або телефоном):", placeholder="Введіть ім'я або цифри номера...")
             if search_query.strip():
                 query_lower = search_query.strip().lower()
@@ -359,7 +353,6 @@ if master_name.lower() in ["адмін", "хост"]:
                     df_cl_view["Ім'я"].astype(str).str.lower().str.contains(query_lower, na=False) | 
                     df_cl_view["Телефон"].astype(str).str.contains(query_lower, na=False)
                 ]
-            
             with open(clients_file, "rb") as f:
                 client_excel_bytes = f.read()
             st.download_button(
@@ -372,7 +365,6 @@ if master_name.lower() in ["адмін", "хост"]:
         else:
             st.info("Клієнтська база поки пуста.")
             
-        # Повертаємо завантажувач файлу бази на сервер
         st.subheader("📤 Завантажити оновлену базу клієнтів (Excel)")
         uploaded_client_file = st.file_uploader("Оберіть файл `clients_base.xlsx`:", type=["xlsx"])
         if uploaded_client_file is not None:
@@ -384,8 +376,9 @@ if master_name.lower() in ["адмін", "хост"]:
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ Помилка: {e}")
+
+        st.markdown("---")
         
-        # БЛОК 3: ІСТОРІЯ, ЗВІТИ ТА ЗАХИЩЕНЕ ОЧИЩЕННЯ
         st.subheader("📁 Перегляд чеків та управління архівом")
         if os.path.exists(history_file):
             if st.button("📊 Сформувати місячний звіт (зведений звіт за поточний місяць)"):
@@ -554,6 +547,17 @@ else:
     current_price = 0.0
     st.info("У цій категорії поки немає позицій.")
 
+# ПЕРЕВІРКА ІНФОРМАЦІЇ ПРО СКЛАД (якщо обрано матеріал зі складу)
+available_stock_qty = None
+if selected_category == "Матеріали" and selected_service and "(склад)" in selected_service.lower():
+    df_stock_check = load_warehouse_stock()
+    if selected_service in df_stock_check["Матеріал"].values:
+        available_stock_qty = int(df_stock_check.loc[df_stock_check["Матеріал"] == selected_service, "Залишок (шт)"].values[0])
+        if available_stock_qty > 0:
+            st.info(f"📦 **На складі в наявності:** {available_stock_qty} шт.")
+        else:
+            st.warning(f"⚠️ **На складі в наявності:** 0 шт. (Товар повністю закінчився, буде додано з магазину)")
+
 qty = st.number_input("Кількість / Години", min_value=0.1, value=1.0, step=0.5)
 
 if selected_category == "Знижки":
@@ -564,6 +568,69 @@ if selected_category == "Знижки":
 else:
     price = st.number_input("Ціна за одиницю (грн)", min_value=0.0, value=current_price, step=10.0)
 
+# =========================================================================
+# ІНТЕРАКТИВНЕ ПЕРЕХОПЛЕННЯ ПРИ НЕСТАЧІ НА СКЛАДІ (SMART SPLIT)
+# =========================================================================
+if st.session_state.pending_split_item is not None:
+    p_item = st.session_state.pending_split_item
+    st.warning(f"⚠️ **На складі є лише {p_item['stock_qty']} шт. «{p_item['mat_name']}».** Ви запросили {p_item['requested_qty']} шт.")
+    st.markdown("Оберіть дію:")
+    
+    col_sp1, col_sp2 = st.columns(2)
+    with col_sp1:
+        if st.button("🛒 Розділити: залишок зі складу + решта з магазину"):
+            # 1. Додаємо позицію зі складу (скільки є)
+            stock_part_total = p_item['stock_qty'] * p_item['stock_price']
+            st.session_state.cart.append({
+                "name": p_item['mat_name'],
+                "category": "Матеріали",
+                "price": p_item['stock_price'],
+                "qty": float(p_item['stock_qty']),
+                "total": stock_part_total,
+                "is_pct": False
+            })
+            
+            # 2. Додаємо решту як аналогічний матеріал з магазину
+            shop_mat_name = p_item['mat_name'].replace("(склад)", "(магазин)")
+            shop_price = st.session_state.services.get(shop_mat_name, {}).get("price", p_item['stock_price'] * 3)
+            diff_qty = p_item['requested_qty'] - p_item['stock_qty']
+            shop_part_total = diff_qty * shop_price
+            
+            st.session_state.cart.append({
+                "name": shop_mat_name,
+                "category": "Матеріали",
+                "price": shop_price,
+                "qty": float(diff_qty),
+                "total": shop_part_total,
+                "is_pct": False
+            })
+            
+            st.session_state.pending_split_item = None
+            st.success("🎉 Успішно розділено між складом та магазином і додано до чека!")
+            st.rerun()
+            
+    with col_sp2:
+        if st.button("📦 Взяти тільки те, що є на складі"):
+            stock_part_total = p_item['stock_qty'] * p_item['stock_price']
+            st.session_state.cart.append({
+                "name": p_item['mat_name'],
+                "category": "Матеріали",
+                "price": p_item['stock_price'],
+                "qty": float(p_item['stock_qty']),
+                "total": stock_part_total,
+                "is_pct": False
+            })
+            st.session_state.pending_split_item = None
+            st.success("🎉 Додано наявний залишок зі складу до чека!")
+            st.rerun()
+
+    if st.button("✖️ Скасувати додавання"):
+        st.session_state.pending_split_item = None
+        st.rerun()
+        
+    st.stop() # Зупиняємо рендеринг нижньої частини, поки майстер не зробить вибір
+
+# КНОПКА ДОДАТИ ДО ЧЕКА
 if st.button("Додати до чека", type="primary"):
     if not selected_service:
         st.error("Оберіть позицію зі списку.")
@@ -572,6 +639,36 @@ if st.button("Додати до чека", type="primary"):
         if selected_category == "Знижки" and already_has_discount:
             st.error("❌ У чеку вже є знижка!")
         else:
+            # Перевірка наявності на складі при спробі додати матеріал зі складу
+            if selected_category == "Матеріали" and selected_service and "(склад)" in selected_service.lower():
+                df_stock_check = load_warehouse_stock()
+                if selected_service in df_stock_check["Матеріал"].values:
+                    stk_qty = int(df_stock_check.loc[df_stock_check["Матеріал"] == selected_service, "Залишок (шт)"].values[0])
+                    if qty > stk_qty:
+                        if stk_qty > 0:
+                            # Запускаємо сценарій розбиття (Smart Split)
+                            st.session_state.pending_split_item = {
+                                "mat_name": selected_service,
+                                "stock_qty": stk_qty,
+                                "requested_qty": int(qty),
+                                "stock_price": price
+                            }
+                            st.rerun()
+                        else:
+                            # Якщо на складі 0, автоматично пропонуємо додати як магазинну версію
+                            shop_mat_name = selected_service.replace("(склад)", "(магазин)")
+                            shop_price = st.session_state.services.get(shop_mat_name, {}).get("price", price * 3)
+                            st.session_state.cart.append({
+                                "name": shop_mat_name,
+                                "category": "Матеріали",
+                                "price": shop_price,
+                                "qty": qty,
+                                "total": qty * shop_price,
+                                "is_pct": False
+                            })
+                            st.warning(f"⚠️ Товар «{selected_service}» на складі закінчився (0 шт.). Автоматично додано як версію з магазину!")
+                            st.rerun()
+
             if selected_category == "Знижки" and is_percentage_service:
                 item_price = -price
                 item_name_display = f"{selected_service} ({price}%)"
@@ -789,7 +886,7 @@ if st.session_state.cart:
                     with pd.ExcelWriter(history_file, engine='openpyxl') as writer:
                         df_new.to_excel(writer, sheet_name=master_name, index=False)
                 
-                st.success(f"🎉 Чек №{next_receipt_num} збережено, а матеріали автоматично списано зі складу!")
+                st.success(f"🎉 Чек №{next_receipt_num} збережено, а залишки складу оновлено!")
                 st.session_state.cart.clear()
                 st.rerun()
     with col2:
