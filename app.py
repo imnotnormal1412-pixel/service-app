@@ -132,10 +132,15 @@ if master_name.lower() in ["адмін", "хост"]:
     if st.session_state.get("host_authenticated", False):
         st.success("✅ Вітаємо в Панелі Хоста!")
         
-        if st.button("⬅️ Повернутися до оформлення чеку"):
-            st.session_state.logged_in_master = ""
-            st.session_state.host_authenticated = False
-            st.rerun()
+        col_nav1, col_nav2 = st.columns([2, 1])
+        with col_nav1:
+            if st.button("⬅️ Повернутися до оформлення чеку"):
+                st.session_state.logged_in_master = ""
+                st.session_state.host_authenticated = False
+                st.rerun()
+        with col_nav2:
+            if st.button("🔄 Оновити історію чеків та базу"):
+                st.rerun()
 
         st.markdown("---")
         
@@ -451,7 +456,6 @@ if st.session_state.cart:
                 if not already_has_discount:
                     status_lower = client_status.lower()
                     
-                    # Пріоритет пільговим статусам: показуємо чітко одну найвигіднішу пільгову кнопку
                     if "пенсіонер" in status_lower:
                         if st.button("👵 Застосувати Знижка Пенсіонер"):
                             st.session_state.cart.append({"name": "Знижка Пенсіонер", "category": "Знижки", "price": -200, "qty": 1.0, "total": -200, "is_pct": False})
