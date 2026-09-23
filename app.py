@@ -450,7 +450,7 @@ if master_name.lower() in ["адмін", "хост"]:
 
         st.markdown("---")
         
-        st.subheader("📁 Перегляд чеків та управління архівом")
+        # 📁 Перегляд чеків та управління архівом
         if os.path.exists(history_file):
             if st.button("📊 Сформувати місячний звіт (зведений звіт за поточний місяць)"):
                 try:
@@ -559,18 +559,16 @@ if master_name.lower() in ["адмін", "хост"]:
                     st.subheader("🔍 Вибір чека для перегляду фото та деталей")
                     
                     if not df_sheet.empty:
-                        # Показуємо просто таблицю записів аркуша для зручності
                         row_indices = df_sheet.index.tolist()
                         selected_row_idx = st.selectbox(
-                            "Оберіть рядок/чек з історії:", 
-                            row_indices, 
+                            "Оберіть рядок/чек з історії:",
+                            row_indices,
                             format_func=lambda x: f"Рядок {x}: {str(df_sheet.loc[x, 'Послуга/Позиція']) if 'Послуга/Позиція' in df_sheet.columns else 'Запис'}"
                         )
                         
                         df_single_receipt = df_sheet.loc[[selected_row_idx]]
                         st.dataframe(df_single_receipt, use_container_width=True)
                         
-                        # Шукаємо фото в цьому рядку
                         photo_col_val = ""
                         for p_col in ["Фото", "Фото (Drive)"]:
                             if p_col in df_single_receipt.columns:
@@ -601,6 +599,10 @@ if master_name.lower() in ["адмін", "хост"]:
                             st.info("ℹ️ До цього запису фотографії не прикріплювались.")
                     else:
                         st.info("Архів цього майстра порожній.")
+            except Exception as e:
+                st.info(f"Помилка завантаження аркуша: {e}")
+        else:
+            st.info("Архів чеків порожній.")
 
     st.stop()
 
