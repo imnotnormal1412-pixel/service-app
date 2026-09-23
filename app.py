@@ -554,69 +554,51 @@ if master_name.lower() in ["адмін", "хост"]:
                         df_sheet = df_sheet.drop(columns=["Дата"])
                     st.dataframe(df_sheet, use_container_width=True)
                     
-                    # --- БЛОК ВИБОРУ ЧЕКА ДЛЯ ПЕРЕГЛЯДУ ФОТО ТА ДЕТАЛЕЙ (ПОКРАЩЕНИЙ) ---
+                    # --- БЛОК ВИБОРУ ЧЕКА ДЛЯ ПЕРЕГЛЯДУ ФОТО ТА ДЕТАЛЕЙ ---
                     st.markdown("---")
                     st.subheader("🔍 Вибір чека для перегляду фото та деталей")
                     
                     if not df_sheet.empty:
-                        # Шукаємо колонку з номером чека або створюємо список із доступних рядків
-                        receipt_col = None
-                        for col in ["№ чека", "Номер чека", "№"]:
-                            if col in df_sheet.columns:
-                                receipt_col = col
-                                break
+                        # Показуємо просто таблицю записів аркуша для зручності
+                        row_indices = df_sheet.index.tolist()
+                        selected_row_idx = st.selectbox(
+                            "Оберіть рядок/чек з історії:", 
+                            row_indices, 
+                            format_func=lambda x: f"Рядок {x}: {str(df_sheet.loc[x, 'Послуга/Позиція']) if 'Послуга/Позиція' in df_sheet.columns else 'Запис'}"
+                        )
                         
-                        if receipt_col:
-                            unique_receipts = df_sheet[receipt_col].dropna().unique().tolist()
-                            unique_receipts = [r for r in unique_receipts if str(r).strip() != "" and "ЗАГАЛОМ" not in str(r)]
-                        else:
-                            unique_receipts = []
-                            
-                        if unique_receipts:
-                            selected_receipt = st.selectbox("Оберіть чек:", unique_receipts)
-                            df_single_receipt = df_sheet[df_sheet[receipt_col] == selected_receipt]
-                        else:
-                            # Якщо немає чіткої колонки з номерами, даємо обрати просто за рядками/послугами
-                            row_indices = df_sheet.index.tolist()
-                            else:
-                            # Якщо немає чіткої колонки з номерами, даємо обрати просто за рядками/послугами
-                            row_indices = df_sheet.index.tolist()
-                            selected_row_idx = st.selectbox("Оберіть запис з таблиці:", row_indices, format_func=lambda x: f"Рядок {x}: {df_sheet.loc[x, 'Послуга/Позиція'] if 'Послуга/Позиція' in df_sheet.columns else 'Дані'}")
-                            df_single_receipt = df_sheet.loc[[selected_row_idx]]
-                            df_single_receipt = df_sheet.loc[[selected_row_idx]]
-
+                        df_single_receipt = df_sheet.loc[[selected_row_idx]]
+                        st.dataframe(df_single_receipt, use_container_width=True)
+                        
+                        # Шукаємо фото в цьому рядку
+                        photo_col_val = ""
+                        for p_col in ["Фото", "Фото (Drive)"]:
+                            if p_col in df_single_receipt.columns:
+                                val = str(df_single_receipt.iloc[0][p_col])
+                                if val and val.lower() != "nan" and val.strip() != "":
+                                    photo_col_val = val
+                                    break
+                                    
                         photo_dir = "receipt_photos"
-                        if not df_single_receipt.empty:
-                            photo_col_val = ""
-                            for p_col in ["Фото", "Фото (Drive)"]:
-                                if p_col in df_single_receipt.columns:
-                                    non_empty_photos = df_single_receipt[p_col].dropna().unique()
-                                    if len(non_empty_photos) > 0 and str(non_empty_photos[0]).strip() != "":
-                                        photo_col_val = str(non_empty_photos[0])
-                                        break
-                                        
-                            st.write("📄 **Деталі обраного чека / запису:**")
-                            st.dataframe(df_single_receipt, use_container_width=True)
-                            
-                            if photo_col_val and photo_col_val.strip():
-                                st.success(f"📷 Знайдено прикріплені файли: `{photo_col_val}`")
-                                filenames = [fn.strip() for fn in photo_col_val.split(",")]
-                                for fn in filenames:
-                                    full_path = os.path.join(photo_dir, fn)
-                                    if os.path.exists(full_path):
-                                        st.image(full_path, caption=f"Фото до запису — {fn}", use_container_width=True)
-                                        with open(full_path, "rb") as pf:
-                                            st.download_button(
-                                                label=f"📥 Завантажити файл: {fn}",
-                                                data=pf.read(),
-                                                file_name=fn,
-                                                mime="image/jpeg",
-                                                key=f"dl_ph_{fn}"
-                                            )
-                                    else:
-                                        st.warning(f"⚠️ Файл `{fn}` зазначено в базі, але на сервері в папці `receipt_photos` його не знайдено.")
-                            else:
-                                st.info("ℹ️ До цього запису/чека фотографії не прикріплювались.")
+                        if photo_col_val:
+                            st.success(f"📷 Знайдено прикріплені файли: `{photo_col_val}`")
+                            filenames = [fn.strip() for fn in photo_col_val.split(",")]
+                            for fn in filenames:
+                                full_path = os.path.join(photo_dir, fn)
+                                if os.path.exists(full_path):
+                                    st.image(full_path, caption=f"Фото — {fn}", use_container_width=True)
+                                    with open(full_path, "rb") as pf:
+                                        st.download_button(
+                                            label=f"📥 Завантажити файл: {fn}",
+                                            data=pf.read(),
+                                            file_name=fn,
+                                            mime="image/jpeg",
+                                            key=f"dl_ph_{selected_row_idx}_{fn}"
+                                        )
+                                else:
+                                    st.warning(f"⚠️ Файл `{fn}` зазначено в базі, але на сервері в папці його немає.")
+                        else:
+                            st.info("ℹ️ До цього запису фотографії не прикріплювались.")
                     else:
                         st.info("Архів цього майстра порожній.")
 
