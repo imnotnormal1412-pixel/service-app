@@ -578,7 +578,11 @@ if master_name.lower() in ["адмін", "хост"]:
                         else:
                             # Якщо немає чіткої колонки з номерами, даємо обрати просто за рядками/послугами
                             row_indices = df_sheet.index.tolist()
-                            selected_row_idx = st.selectbox("Оберіть запис з таблиці:", row_indices, format_func=lambda x: fיРядок {x}: {df_sheet.loc[x, 'Послуга/Позиція'] if 'Послуга/Позиція' in df_sheet.columns else 'Дані'}י)
+                            else:
+                            # Якщо немає чіткої колонки з номерами, даємо обрати просто за рядками/послугами
+                            row_indices = df_sheet.index.tolist()
+                            selected_row_idx = st.selectbox("Оберіть запис з таблиці:", row_indices, format_func=lambda x: f"Рядок {x}: {df_sheet.loc[x, 'Послуга/Позиція'] if 'Послуга/Позиція' in df_sheet.columns else 'Дані'}")
+                            df_single_receipt = df_sheet.loc[[selected_row_idx]]
                             df_single_receipt = df_sheet.loc[[selected_row_idx]]
 
                         photo_dir = "receipt_photos"
