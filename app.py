@@ -9,9 +9,6 @@ import pandas as pd
 
 ALLOWED_MASTERS = ["Микола", "Олена", "Тато", "Адмін", "Хост"]
 
-# Налаштування Google Диску для фотофіксації (можна вказати ID своєї папки)
-GOOGLE_DRIVE_FOLDER_ID = "123456789_твій_id_папки_на_диску" 
-
 if 'services' not in st.session_state:
     st.session_state.services = {
         # --- Підкатегорія: Штроблення та отвори ---
@@ -179,11 +176,21 @@ def update_warehouse_after_sale(cart_items):
                 
     df_stock.to_excel(warehouse_file, index=False)
 
-def upload_photos_to_google_drive(uploaded_files, receipt_id, master_name):
-    # Логіка відправки на Google Диск (тут створюється посилання / папка)
-    # Зберігає місце на сервері та не вантажить Excel
-    folder_link = f"https://drive.google.com/drive/folders/{GOOGLE_DRIVE_FOLDER_ID}?q=receipt_{receipt_id}_{master_name}"
-    return folder_link
+def save_photos_locally(uploaded_files, receipt_id, master_name):
+    photo_dir = "receipt_photos"
+    if not os.path.exists(photo_dir):
+        os.makedirs(photo_dir)
+        
+    saved_filenames = []
+    for idx, file in enumerate(uploaded_files):
+        ext = file.name.split('.')[-1]
+        filename = f"chek_{receipt_id}_{master_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{idx+1}.{ext}"
+        filepath = os.path.join(photo_dir, filename)
+        with open(filepath, "wb") as f:
+            f.write(file.getbuffer())
+        saved_filenames.append(filename)
+        
+    return ", ".join(saved_filenames)
 
 # =========================================================================
 # 3. ІНТЕРФЕЙС ТА АВТОРИЗАЦІЯ
@@ -546,6 +553,21 @@ if master_name.lower() in ["адмін", "хост"]:
                             df_sheet = df_sheet[df_sheet["Дата"] == selected_date_filter]
                         df_sheet = df_sheet.drop(columns=["Дата"])
                     st.dataframe(df_sheet, use_container_width=True)
+                    
+                    # БЛОК ПЕРЕГЛЯДУ ФОТО В АДМІНЦІ
+                    st.markdown("---")
+                    st.subheader("🖼️ Перегляд завантажених фото до чеків")
+                    photo_dir = "receipt_photos"
+                    if os.path.exists(photo_dir):
+                        all_photos = os.listdir(photo_dir)
+                        if all_photos:
+                            selected_photo = st.selectbox("Оберіть файл фото для перегляду:", all_photos)
+                            if selected_photo:
+                                st.image(os.path.join(photo_dir, selected_photo), caption=selected_photo, use_container_width=True)
+                        else:
+                            st.info("Папка з фото поки порожня.")
+                    else:
+                        st.info("Фотографії ще не завантажувались.")
             except Exception as e:
                 st.info(f"Помилка: {e}")
         else:
@@ -725,7 +747,7 @@ if st.button("Додати до чека", type="primary"):
             
             st.session_state.cart.append({
                 "name": item_name_display, "category": selected_category,
-                "price": item_price, "qty": qty, "unit": current_unit,
+                "price_display": item_price, "price": item_price, "qty": qty, "unit": current_unit,
                 "total": total, "is_pct": (selected_category == "Знижки" and is_percentage_service)
             })
             st.success(f"Додано до чека: {item_name_display}")
@@ -809,21 +831,39 @@ if st.session_state.cart:
                 st.info("💡 Номер новий. Вкажіть ім'я клієнта:")
                 client_name = st.text_input("👤 Ім'я нового клієнта:")
     
-    # Приватний коментар майстра до поточного чека
     master_current_comment = st.text_input("💬 Приватний коментар майстра до роботи (необов'язково):", placeholder="Наприклад: складні умови, арматура...")
     
-    # Опціональна фотофіксація (відправляється одразу на Google Диск)
     st.markdown("📸 **Фотофіксація робіт / об'єкта (необов'язково):**")
     uploaded_photos = st.file_uploader("Зробіть фото або оберіть з галереї:", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
     st.markdown("---")
     
-    # ДВЕ КНОПКИ ДІЇ: КОШТОРИС VS ФІНАЛЬНИЙ ЧЕК В РОБОТУ
     col_action1, col_action2, col_action3 = st.columns([2, 2, 1])
     
     with col_action1:
-        if st.button("📥 Сформувати попередній кошторис"):
-            st.info(f"📋 **Попередній кошторис на суму: {grand_total} грн** (Склад не списано. Можете показати клієнту або скинути в месенджер).")
+        df_estimate = pd.DataFrame([{
+            "№": i+1,
+            "Категорія": item['category'],
+            "Найменування": item['name'],
+            "Кількість": f"{item['qty']} {item['unit']}",
+            "Ціна за од.": item['price_display'],
+            "Сума (грн)": item['total']
+        } for i, item in enumerate(calculated_cart)])
+        
+        estimate_filename = f"poperedniy_koshtorys_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        with pd.ExcelWriter(estimate_filename, engine='openpyxl') as writer:
+            df_estimate.to_excel(writer, sheet_name="Кошторис", index=False)
+            
+        with open(estimate_filename, "rb") as ef:
+            estimate_bytes = ef.read()
+            
+        st.download_button(
+            label="📥 Завантажити попередній кошторис (.xlsx)",
+            data=estimate_bytes,
+            file_name=estimate_filename,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="secondary"
+        )
             
     with col_action2:
         if st.button("💾 Завершити і закрити чек в роботу", type="primary"):
@@ -840,10 +880,23 @@ if st.session_state.cart:
                 cleaned_phone = "Анонім" if is_anon else f"'{''.join(filter(str.isdigit, entered_phone))}"
                 cleaned_name = "Анонім" if is_anon else (client_name.strip() or found_client_name)
                 
-                # Обробка фото через Google Диск
-                drive_link = ""
+                # Визначаємо наступний номер чека для назви фото
+                next_receipt_num = 1
+                if os.path.exists(history_file):
+                    try:
+                        xls = pd.ExcelFile(history_file)
+                        existing_sheet = next((sh for sh in xls.sheet_names if sh.lower() == master_name.lower()), None)
+                        if existing_sheet:
+                            df_old = pd.read_excel(history_file, sheet_name=existing_sheet)
+                            if "№ чека" in df_old.columns and not df_old["№ чека"].dropna().empty:
+                                next_receipt_num = int(df_old["№ чека"].dropna().max()) + 1
+                    except Exception:
+                        pass
+
+                # Зберігаємо фото локально в папку receipt_photos
+                photo_filenames_str = ""
                 if uploaded_photos:
-                    drive_link = upload_photos_to_google_drive(uploaded_photos, "new", master_name)
+                    photo_filenames_str = save_photos_locally(uploaded_photos, next_receipt_num, master_name)
                 
                 if not is_anon:
                     full_phone_num = "".join(filter(str.isdigit, entered_phone))
@@ -877,32 +930,19 @@ if st.session_state.cart:
                         df_clients = df_clients.drop(columns=["ЧистийТелефон"])
                     df_clients.to_excel(clients_file, index=False)
                 
-                # Реальне списання зі складу
                 update_warehouse_after_sale(st.session_state.cart)
-                
-                next_receipt_num = 1
-                if os.path.exists(history_file):
-                    try:
-                        xls = pd.ExcelFile(history_file)
-                        existing_sheet = next((sh for sh in xls.sheet_names if sh.lower() == master_name.lower()), None)
-                        if existing_sheet:
-                            df_old = pd.read_excel(history_file, sheet_name=existing_sheet)
-                            if "№ чека" in df_old.columns and not df_old["№ чека"].dropna().empty:
-                                next_receipt_num = int(df_old["№ чека"].dropna().max()) + 1
-                    except Exception:
-                        pass
                 
                 new_rows = [{
                     "№ чека": next_receipt_num, "Час": now, "Майстер": master_name, "Телефон клієнта": cleaned_phone,
                     "Ім'я клієнта": cleaned_name, "Категорія": item['category'], "Послуга/Позиція": item['name'],
                     "Кількість": f"{item['qty']} {item.get('unit', 'шт')}", "Ціна за од. / Значення": item['price_display'], 
-                    "Сума (грн)": item['total'], "Коментар майстра": master_current_comment.strip(), "Фото (Drive)": drive_link
+                    "Сума (грн)": item['total'], "Коментар майстра": master_current_comment.strip(), "Фото": photo_filenames_str
                 } for item in calculated_cart]
                 
                 new_rows.append({
                     "№ чека": next_receipt_num, "Час": now, "Майстер": master_name, "Телефон клієнта": cleaned_phone,
                     "Ім'я клієнта": cleaned_name, "Категорія": "--- ЗАГАЛОМ ЗА ЧЕК ---", "Послуга/Позиція": f"Підсумок чека №{next_receipt_num}",
-                    "Кількість": "", "Ціна за од. / Значення": "", "Сума (грн)": grand_total, "Коментар майстра": "", "Фото (Drive)": ""
+                    "Кількість": "", "Ціна за од. / Значення": "", "Сума (грн)": grand_total, "Коментар майстра": "", "Фото": ""
                 })
                 
                 df_new = pd.DataFrame(new_rows)
@@ -928,7 +968,7 @@ if st.session_state.cart:
                     with pd.ExcelWriter(history_file, engine='openpyxl') as writer:
                         df_new.to_excel(writer, sheet_name=master_name, index=False)
                 
-                st.success(f"🎉 Чек №{next_receipt_num} успішно закрито в роботу! Матеріали списано, фото завантажено на Google Диск.")
+                st.success(f"🎉 Чек №{next_receipt_num} успішно закрито в роботу! Матеріали списано, а фото збережено на сервері.")
                 st.session_state.cart.clear()
                 st.rerun()
 
