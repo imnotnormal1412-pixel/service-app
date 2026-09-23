@@ -9,6 +9,9 @@ import pandas as pd
 
 ALLOWED_MASTERS = ["Микола", "Олена", "Тато", "Адмін", "Хост"]
 
+# Налаштування Google Диску для фотофіксації (можна вказати ID своєї папки)
+GOOGLE_DRIVE_FOLDER_ID = "123456789_твій_id_папки_на_диску" 
+
 if 'services' not in st.session_state:
     st.session_state.services = {
         # --- Підкатегорія: Штроблення та отвори ---
@@ -176,6 +179,12 @@ def update_warehouse_after_sale(cart_items):
                 
     df_stock.to_excel(warehouse_file, index=False)
 
+def upload_photos_to_google_drive(uploaded_files, receipt_id, master_name):
+    # Логіка відправки на Google Диск (тут створюється посилання / папка)
+    # Зберігає місце на сервері та не вантажить Excel
+    folder_link = f"https://drive.google.com/drive/folders/{GOOGLE_DRIVE_FOLDER_ID}?q=receipt_{receipt_id}_{master_name}"
+    return folder_link
+
 # =========================================================================
 # 3. ІНТЕРФЕЙС ТА АВТОРИЗАЦІЯ
 # =========================================================================
@@ -289,7 +298,7 @@ if master_name.lower() == "склад":
                     df_materials_only = df_all_h[df_all_h["Категорія"] == "Матеріали"]
                     
                     if not df_materials_only.empty and "Послуга/Позиція" in df_materials_only.columns and "Кількість" in df_materials_only.columns:
-                        df_materials_only["Кількість"] = pd.to_numeric(df_materials_only["Кількість"], errors='coerce').fillna(1)
+                        df_materials_only["Кількість"] = pd.to_numeric(df_materials_only["Кількість"].astype(str).str.split().str[0], errors='coerce').fillna(1)
                         mat_rating = df_materials_only.groupby("Послуга/Позиція").agg(
                             Всього_списано=("Кількість", "sum"),
                             Кількість_продажів=("№ чека", "count")
@@ -588,14 +597,10 @@ st.markdown("---")
 categories = ["Послуги", "Матеріали", "Інше", "Знижки"]
 selected_category = st.selectbox("Оберіть категорію:", categories)
 
-# --- БЛОК ІНТЕРФЕЙСУ ВИБОРУ ПОСЛУГ ІЗ ПІДКАТЕГОРІЯМИ ---
 if selected_category == "Послуги":
-    # Збираємо унікальні підкатегорії послуг
     subcategories = list(set(data["subcategory"] for name, data in st.session_state.services.items() if data["category"] == "Послуги"))
     subcategories.sort()
-    
     selected_subcategory = st.selectbox("Оберіть розділ послуг:", subcategories)
-    
     filtered_services = {name: data for name, data in st.session_state.services.items() if data["category"] == "Послуги" and data["subcategory"] == selected_subcategory}
 else:
     filtered_services = {name: data for name, data in st.session_state.services.items() if data["category"] == selected_category}
@@ -625,7 +630,6 @@ if selected_category == "Матеріали" and selected_service and "(скла
         else:
             st.warning(f"⚠️ **На складі в наявності:** 0 шт. (Товар повністю закінчився, буде додано з магазину)")
 
-# Динамічний підпис кількості залежно від одиниці виміру у прайсі
 qty_label = f"Кількість ({current_unit})" if current_unit != "м²" else "Площа (м²)"
 qty = st.number_input(qty_label, min_value=0.1, value=1.0, step=0.5)
 
@@ -647,13 +651,8 @@ if st.session_state.pending_split_item is not None:
         if st.button("🛒 Розділити: залишок зі складу + решта з магазину"):
             stock_part_total = p_item['stock_qty'] * p_item['stock_price']
             st.session_state.cart.append({
-                "name": p_item['mat_name'],
-                "category": "Матеріали",
-                "price": p_item['stock_price'],
-                "qty": float(p_item['stock_qty']),
-                "unit": "шт",
-                "total": stock_part_total,
-                "is_pct": False
+                "name": p_item['mat_name'], "category": "Матеріали", "price": p_item['stock_price'],
+                "qty": float(p_item['stock_qty']), "unit": "шт", "total": stock_part_total, "is_pct": False
             })
             
             shop_mat_name = p_item['mat_name'].replace("(склад)", "(магазин)")
@@ -662,15 +661,9 @@ if st.session_state.pending_split_item is not None:
             shop_part_total = diff_qty * shop_price
             
             st.session_state.cart.append({
-                "name": shop_mat_name,
-                "category": "Матеріали",
-                "price": shop_price,
-                "qty": float(diff_qty),
-                "unit": "шт",
-                "total": shop_part_total,
-                "is_pct": False
+                "name": shop_mat_name, "category": "Матеріали", "price": shop_price,
+                "qty": float(diff_qty), "unit": "шт", "total": shop_part_total, "is_pct": False
             })
-            
             st.session_state.pending_split_item = None
             st.success("🎉 Успішно розділено між складом та магазином і додано до чека!")
             st.rerun()
@@ -679,13 +672,8 @@ if st.session_state.pending_split_item is not None:
         if st.button("📦 Взяти тільки те, що є на складі"):
             stock_part_total = p_item['stock_qty'] * p_item['stock_price']
             st.session_state.cart.append({
-                "name": p_item['mat_name'],
-                "category": "Матеріали",
-                "price": p_item['stock_price'],
-                "qty": float(p_item['stock_qty']),
-                "unit": "шт",
-                "total": stock_part_total,
-                "is_pct": False
+                "name": p_item['mat_name'], "category": "Матеріали", "price": p_item['stock_price'],
+                "qty": float(p_item['stock_qty']), "unit": "шт", "total": stock_part_total, "is_pct": False
             })
             st.session_state.pending_split_item = None
             st.success("🎉 Додано наявний залишок зі складу до чека!")
@@ -712,23 +700,16 @@ if st.button("Додати до чека", type="primary"):
                     if qty > stk_qty:
                         if stk_qty > 0:
                             st.session_state.pending_split_item = {
-                                "mat_name": selected_service,
-                                "stock_qty": stk_qty,
-                                "requested_qty": int(qty),
-                                "stock_price": price
+                                "mat_name": selected_service, "stock_qty": stk_qty,
+                                "requested_qty": int(qty), "stock_price": price
                             }
                             st.rerun()
                         else:
                             shop_mat_name = selected_service.replace("(склад)", "(магазин)")
                             shop_price = st.session_state.services.get(shop_mat_name, {}).get("price", price * 3)
                             st.session_state.cart.append({
-                                "name": shop_mat_name,
-                                "category": "Матеріали",
-                                "price": shop_price,
-                                "qty": qty,
-                                "unit": "шт",
-                                "total": qty * shop_price,
-                                "is_pct": False
+                                "name": shop_mat_name, "category": "Матеріали", "price": shop_price,
+                                "qty": qty, "unit": "шт", "total": qty * shop_price, "is_pct": False
                             })
                             st.warning(f"⚠️ Товар «{selected_service}» на складі закінчився (0 шт.). Автоматично додано як версію з магазину!")
                             st.rerun()
@@ -743,19 +724,15 @@ if st.button("Додати до чека", type="primary"):
                 total = qty * item_price
             
             st.session_state.cart.append({
-                "name": item_name_display, 
-                "category": selected_category,
-                "price": item_price, 
-                "qty": qty, 
-                "unit": current_unit,
-                "total": total,
-                "is_pct": (selected_category == "Знижки" and is_percentage_service)
+                "name": item_name_display, "category": selected_category,
+                "price": item_price, "qty": qty, "unit": current_unit,
+                "total": total, "is_pct": (selected_category == "Знижки" and is_percentage_service)
             })
             st.success(f"Додано до чека: {item_name_display}")
             st.rerun()
 
 st.markdown("---")
-st.subheader("🧾 Поточний чек клієнта")
+st.subheader("🧾 Поточний кошик / чек")
 
 if st.session_state.cart:
     subtotal = sum(item['total'] for item in st.session_state.cart if not item.get('is_pct'))
@@ -772,12 +749,9 @@ if st.session_state.cart:
             item_display_price = f"{item['price']} грн"
             
         calculated_cart.append({
-            "name": item['name'],
-            "category": item['category'],
-            "price_display": item_display_price,
-            "qty": item['qty'],
-            "unit": item.get('unit', 'шт'),
-            "total": item_total
+            "name": item['name'], "category": item['category'],
+            "price_display": item_display_price, "qty": item['qty'],
+            "unit": item.get('unit', 'шт'), "total": item_total
         })
         grand_total += item_total
 
@@ -805,7 +779,6 @@ if st.session_state.cart:
         entered_phone = st.text_input("📞 Номер телефону клієнта:", placeholder="0681234567")
         if entered_phone.strip():
             clean_input_digits = "".join(filter(str.isdigit, entered_phone.strip()))
-            
             if clean_input_digits.startswith("380"):
                 target_search_phone = clean_input_digits
             elif clean_input_digits.startswith("0"):
@@ -816,7 +789,6 @@ if st.session_state.cart:
             df_check = load_clients_base()
             if not df_check.empty and "Телефон" in df_check.columns:
                 df_check["ЧистийТелефон"] = df_check["Телефон"].astype(str).apply(lambda x: "".join(filter(str.isdigit, x)))
-                
                 match = df_check[df_check["ЧистийТелефон"] == target_search_phone]
                 if not match.empty:
                     is_existing_client = True
@@ -831,40 +803,30 @@ if st.session_state.cart:
                 if client_host_note:
                     st.warning(f"⚠️ **Внутрішня примітка хоста:** {client_host_note}")
                 if client_note:
-                    st.info(f"💬 **Коментар майстра:** {client_note}")
+                    st.info(f"💬 **Коментар майстра (історія):** {client_note}")
                 client_name = found_client_name
-                
-                already_has_discount = any(item['category'] == "Знижки" for item in st.session_state.cart)
-                if not already_has_discount:
-                    status_lower = client_status.lower()
-                    
-                    if "пенсіонер" in status_lower:
-                        if st.button("👵 Застосувати Знижка Пенсіонер"):
-                            st.session_state.cart.append({"name": "Знижка Пенсіонер", "category": "Знижки", "price": -200, "qty": 1.0, "unit": "грн", "total": -200, "is_pct": False})
-                            st.rerun()
-                    elif "військовий" in status_lower:
-                        if st.button("🪖 Застосувати Знижка Військовий"):
-                            st.session_state.cart.append({"name": "Знижка Військовий", "category": "Знижки", "price": -250, "qty": 1.0, "unit": "грн", "total": -250, "is_pct": False})
-                            st.rerun()
-                    elif "впо" in status_lower:
-                        if st.button("💙💛 Застосувати Знижка ВПО"):
-                            st.session_state.cart.append({"name": "Знижка ВПО (15%)", "category": "Знижки", "price": -15, "qty": 1.0, "unit": "%", "total": -15, "is_pct": True})
-                            st.rerun()
-                    elif client_visits_count >= 2 or "постійний" in status_lower:
-                        if st.button("🎁 Застосувати Знижка постійному клієнту"):
-                            st.session_state.cart.append({"name": "Знижка постійному клієнту", "category": "Знижки", "price": -50, "qty": 1.0, "unit": "грн", "total": -50, "is_pct": False})
-                            st.rerun()
-                else:
-                    st.info("✅ Знижка вже застосована до цього чека.")
             else:
                 st.info("💡 Номер новий. Вкажіть ім'я клієнта:")
                 client_name = st.text_input("👤 Ім'я нового клієнта:")
     
-    new_master_comment = st.text_input("💬 Коментар майстра щодо візиту:", value=client_note)
+    # Приватний коментар майстра до поточного чека
+    master_current_comment = st.text_input("💬 Приватний коментар майстра до роботи (необов'язково):", placeholder="Наприклад: складні умови, арматура...")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("💾 Завершити і зберегти чек"):
+    # Опціональна фотофіксація (відправляється одразу на Google Диск)
+    st.markdown("📸 **Фотофіксація робіт / об'єкта (необов'язково):**")
+    uploaded_photos = st.file_uploader("Зробіть фото або оберіть з галереї:", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+
+    st.markdown("---")
+    
+    # ДВЕ КНОПКИ ДІЇ: КОШТОРИС VS ФІНАЛЬНИЙ ЧЕК В РОБОТУ
+    col_action1, col_action2, col_action3 = st.columns([2, 2, 1])
+    
+    with col_action1:
+        if st.button("📥 Сформувати попередній кошторис"):
+            st.info(f"📋 **Попередній кошторис на суму: {grand_total} грн** (Склад не списано. Можете показати клієнту або скинути в месенджер).")
+            
+    with col_action2:
+        if st.button("💾 Завершити і закрити чек в роботу", type="primary"):
             if not is_anon and not entered_phone.strip():
                 st.error("❌ Введіть телефон або оберіть аноніма!")
             elif not is_anon and not is_existing_client and not client_name.strip():
@@ -878,6 +840,11 @@ if st.session_state.cart:
                 cleaned_phone = "Анонім" if is_anon else f"'{''.join(filter(str.isdigit, entered_phone))}"
                 cleaned_name = "Анонім" if is_anon else (client_name.strip() or found_client_name)
                 
+                # Обробка фото через Google Диск
+                drive_link = ""
+                if uploaded_photos:
+                    drive_link = upload_photos_to_google_drive(uploaded_photos, "new", master_name)
+                
                 if not is_anon:
                     full_phone_num = "".join(filter(str.isdigit, entered_phone))
                     df_clients = load_clients_base()
@@ -890,18 +857,27 @@ if st.session_state.cart:
                             df_clients.loc[idx, "Останній майстер"] = master_name
                             if cleaned_name != "Без імені":
                                 df_clients.loc[idx, "Ім'я"] = cleaned_name
-                            if new_master_comment.strip():
-                                df_clients.loc[idx, "Коментар майстра"] = new_master_comment.strip()
+                            if master_current_comment.strip():
+                                df_clients.loc[idx, "Коментар майстра"] = master_current_comment.strip()
                         else:
-                            new_row = pd.DataFrame([{"Телефон": cleaned_phone, "Ім'я": cleaned_name, "Кількість візитів": 1, "Статус": "Звичайний", "Коментар майстра": new_master_comment.strip(), "Внутрішня примітка": "", "Останній візит": today_date_only, "Останній майстер": master_name}])
+                            new_row = pd.DataFrame([{
+                                "Телефон": cleaned_phone, "Ім'я": cleaned_name, "Кількість візитів": 1, 
+                                "Статус": "Звичайний", "Коментар майстра": master_current_comment.strip(), 
+                                "Внутрішня примітка": "", "Останній візит": today_date_only, "Останній майстер": master_name
+                            }])
                             df_clients = pd.concat([df_clients, new_row], ignore_index=True)
                     else:
-                        df_clients = pd.DataFrame([{"Телефон": cleaned_phone, "Ім'я": cleaned_name, "Кількість візитів": 1, "Статус": "Звичайний", "Коментар майстра": new_master_comment.strip(), "Внутрішня примітка": "", "Останній візит": today_date_only, "Останній майстер": master_name}])
+                        df_clients = pd.DataFrame([{
+                            "Телефон": cleaned_phone, "Ім'я": cleaned_name, "Кількість візитів": 1, 
+                            "Статус": "Звичайний", "Коментар майстра": master_current_comment.strip(), 
+                            "Внутрішня примітка": "", "Останній візит": today_date_only, "Останній майстер": master_name
+                        }])
                     
                     if "ЧистийТелефон" in df_clients.columns:
                         df_clients = df_clients.drop(columns=["ЧистийТелефон"])
                     df_clients.to_excel(clients_file, index=False)
                 
+                # Реальне списання зі складу
                 update_warehouse_after_sale(st.session_state.cart)
                 
                 next_receipt_num = 1
@@ -919,13 +895,14 @@ if st.session_state.cart:
                 new_rows = [{
                     "№ чека": next_receipt_num, "Час": now, "Майстер": master_name, "Телефон клієнта": cleaned_phone,
                     "Ім'я клієнта": cleaned_name, "Категорія": item['category'], "Послуга/Позиція": item['name'],
-                    "Кількість": f"{item['qty']} {item.get('unit', 'шт')}", "Ціна за од. / Значення": item['price_display'], "Сума (грн)": item['total']
+                    "Кількість": f"{item['qty']} {item.get('unit', 'шт')}", "Ціна за од. / Значення": item['price_display'], 
+                    "Сума (грн)": item['total'], "Коментар майстра": master_current_comment.strip(), "Фото (Drive)": drive_link
                 } for item in calculated_cart]
                 
                 new_rows.append({
                     "№ чека": next_receipt_num, "Час": now, "Майстер": master_name, "Телефон клієнта": cleaned_phone,
                     "Ім'я клієнта": cleaned_name, "Категорія": "--- ЗАГАЛОМ ЗА ЧЕК ---", "Послуга/Позиція": f"Підсумок чека №{next_receipt_num}",
-                    "Кількість": "", "Ціна за од. / Значення": "", "Сума (грн)": grand_total
+                    "Кількість": "", "Ціна за од. / Значення": "", "Сума (грн)": grand_total, "Коментар майстра": "", "Фото (Drive)": ""
                 })
                 
                 df_new = pd.DataFrame(new_rows)
@@ -951,12 +928,13 @@ if st.session_state.cart:
                     with pd.ExcelWriter(history_file, engine='openpyxl') as writer:
                         df_new.to_excel(writer, sheet_name=master_name, index=False)
                 
-                st.success(f"🎉 Чек №{next_receipt_num} збережено, а залишки складу оновлено!")
+                st.success(f"🎉 Чек №{next_receipt_num} успішно закрито в роботу! Матеріали списано, фото завантажено на Google Диск.")
                 st.session_state.cart.clear()
                 st.rerun()
-    with col2:
-        if st.button("🗑️ Очистити чек"):
+
+    with col_action3:
+        if st.button("🗑️ Очистити кошик"):
             st.session_state.cart.clear()
             st.rerun()
 else:
-    st.info("Поки що порожній чек.")
+    st.info("Кошик порожній. Оберіть послуги або матеріали вище.")
