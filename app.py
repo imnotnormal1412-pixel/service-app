@@ -554,20 +554,56 @@ if master_name.lower() in ["адмін", "хост"]:
                         df_sheet = df_sheet.drop(columns=["Дата"])
                     st.dataframe(df_sheet, use_container_width=True)
                     
-                    # БЛОК ПЕРЕГЛЯДУ ФОТО В АДМІНЦІ
+                    # --- БЛОК ВИБОРУ КОНКРЕТНОГО ЧЕКА ДЛЯ ПЕРЕГЛЯДУ ФОТО ---
                     st.markdown("---")
-                    st.subheader("🖼️ Перегляд завантажених фото до чеків")
-                    photo_dir = "receipt_photos"
-                    if os.path.exists(photo_dir):
-                        all_photos = os.listdir(photo_dir)
-                        if all_photos:
-                            selected_photo = st.selectbox("Оберіть файл фото для перегляду:", all_photos)
-                            if selected_photo:
-                                st.image(os.path.join(photo_dir, selected_photo), caption=selected_photo, use_container_width=True)
+                    st.subheader("🔍 Вибір чека для перегляду фото та деталей")
+                    if "№ чека" in df_sheet.columns:
+                        # Отримуємо унікальні номери чеків, які є на цьому аркуші
+                        unique_receipts = df_sheet["№ чека"].dropna().unique().tolist()
+                        unique_receipts = [int(r) for r in unique_receipts if str(r).isdigit()]
+                        
+                        if unique_receipts:
+                            selected_receipt_num = st.selectbox("Оберіть номер чека:", unique_receipts)
+                            
+                            # Фільтруємо рядки для цього чека
+                            df_single_receipt = df_sheet[df_sheet["№ чека"] == selected_receipt_num]
+                            
+                            # Шукаємо завантажені фотографії для цього чека в колонці "Фото" або у папці
+                            photo_dir = "receipt_photos"
+                            if not df_single_receipt.empty:
+                                # Пробуємо дістати назву файлу фото з таблиці
+                                photo_col_val = ""
+                                if "Фото" in df_single_receipt.columns:
+                                    non_empty_photos = df_single_receipt["Фото"].dropna().unique()
+                                    if len(non_empty_photos) > 0:
+                                        photo_col_val = str(non_empty_photos[0])
+                                        
+                                st.write(f"📄 **Деталі чека №{selected_receipt_num}** (Майстер: {selected_sheet})")
+                                
+                                if photo_col_val and photo_col_val.strip():
+                                    st.success(f"📷 Знайдено прикріплені файли: `{photo_col_val}`")
+                                    filenames = [fn.strip() for fn in photo_col_val.split(",")]
+                                    for fn in filenames:
+                                        full_path = os.path.join(photo_dir, fn)
+                                        if os.path.exists(full_path):
+                                            st.image(full_path, caption=f"Чек №{selected_receipt_num} — {fn}", use_container_width=True)
+                                            # Додаємо посилання для скачування/перегляду
+                                            with open(full_path, "rb") as pf:
+                                                st.download_button(
+                                                    label=f"📥 Завантажити файл: {fn}",
+                                                    data=pf.read(),
+                                                    file_name=fn,
+                                                    mime="image/jpeg",
+                                                    key=f"dl_ph_{selected_receipt_num}_{fn}"
+                                                )
+                                        else:
+                                            st.warning(f"⚠️ Файл `{fn}` зазначено в чеку, але на сервері його не знайдено.")
+                                else:
+                                    st.info("ℹ️ До цього конкретного чека фотографії не прикріплювались.")
                         else:
-                            st.info("Папка з фото поки порожня.")
+                            st.info("На цьому аркуші немає чеків з номерами.")
                     else:
-                        st.info("Фотографії ще не завантажувались.")
+                        st.info("У таблиці немає колонки '№ чека'.")
             except Exception as e:
                 st.info(f"Помилка: {e}")
         else:
@@ -880,7 +916,6 @@ if st.session_state.cart:
                 cleaned_phone = "Анонім" if is_anon else f"'{''.join(filter(str.isdigit, entered_phone))}"
                 cleaned_name = "Анонім" if is_anon else (client_name.strip() or found_client_name)
                 
-                # Визначаємо наступний номер чека для назви фото
                 next_receipt_num = 1
                 if os.path.exists(history_file):
                     try:
@@ -893,7 +928,6 @@ if st.session_state.cart:
                     except Exception:
                         pass
 
-                # Зберігаємо фото локально в папку receipt_photos
                 photo_filenames_str = ""
                 if uploaded_photos:
                     photo_filenames_str = save_photos_locally(uploaded_photos, next_receipt_num, master_name)
