@@ -4,83 +4,93 @@ import os
 import pandas as pd
 
 # =========================================================================
-# 1. НАЛАШТУВАННЯ ТА СПИСКИ (МАЙСТРИ, ПОСЛУГИ, ЦІНИ, ЗНИЖКИ)
+# 1. НАЛАШТУВАННЯ ТА СПИСКИ (МАЙСТРИ, ПОСЛУГИ З РОЗДІЛАМИ, ЦІНИ, ЗНИЖКИ)
 # =========================================================================
 
 ALLOWED_MASTERS = ["Микола", "Олена", "Тато", "Адмін", "Хост"]
 
 if 'services' not in st.session_state:
     st.session_state.services = {
-# --- Послуги (Оновлений прайс-лист) ---
-        "Штроблення під проводку в бетоні, глибина штроби 2 см": {"category": "Послуги", "price": 200},
-        "Штроблення під проводку в цеглі, глибина штроби 2 см": {"category": "Послуги", "price": 140},
-        "Влаштування ніші (цегла)": {"category": "Послуги", "price": 990},
-        "Влаштування ніші (бетон)": {"category": "Послуги", "price": 1650},
-        "Установка електрощитка": {"category": "Послуги", "price": 700},
-        "Підключення електролічильника": {"category": "Послуги", "price": 660},
-        "Установка автоматів, 1 фаза": {"category": "Послуги", "price": 190},
-        "Встановлення силових вимикачів, ПЗВ": {"category": "Послуги", "price": 340},
-        "Вирізка отвору та встановлення распредкоробки (бетон)": {"category": "Послуги", "price": 260},
-        "Вирізка отвору та встановлення распредкоробки (цегла)": {"category": "Послуги", "price": 190},
-        "Вирізка отвору та встановлення распредкоробки (гіпсокартон)": {"category": "Послуги", "price": 150},
-        "Складання розпредкоробки, розпаювання проводів": {"category": "Послуги", "price": 350},
-        "Підведення дроту та його закріплення, відкрите проведення": {"category": "Послуги", "price": 45},
-        "Підведення дроту та його закріплення, гофротруба тощо": {"category": "Послуги", "price": 65},
-        "Підведення кабелю перетином вище 4мкв.м., відкрита проводка": {"category": "Послуги", "price": 60},
-        "Підведення кабелю перетином вище 10 кв.м., відкрита проводка": {"category": "Послуги", "price": 80},
-        "Встановлення та підключення розеток та вимикачів": {"category": "Послуги", "price": 140},
-        "Монтаж пластикового короба": {"category": "Послуги", "price": 70},
-        "Встановлення та підключення стельового світильника Армстронг": {"category": "Послуги", "price": 300},
-        "Встановлення люстри": {"category": "Послуги", "price": 535},
-        "Монтаж світильника настінного, бра": {"category": "Послуги", "price": 345},
-        "Монтаж точкового світильника (без трансформатора)": {"category": "Послуги", "price": 240},
-        "Встановлення та підключення трансформатора": {"category": "Послуги", "price": 240},
-        "Монтаж та підключення стабілізатора напруги": {"category": "Послуги", "price": 1425},
-        "Установка різних датчиків, слаботочка": {"category": "Послуги", "price": 250},
-        "Свердління наскрізних отворів у стіні до 25 мм (бетон, цегла)": {"category": "Послуги", "price": 160},
-        "Влаштування контуру заземлення, комплекс робіт": {"category": "Послуги", "price": 7200},
-        "Демонтаж силового кабелю": {"category": "Послуги", "price": 125},
-        "Демонтаж відкритої електропроводки": {"category": "Послуги", "price": 20},
-        "Демонтаж інших кабелів і проводки, відкритих": {"category": "Послуги", "price": 20},
-        "Відключення і демонтаж розеток, вимикачів, світильників": {"category": "Послуги", "price": 60},
-        "Перенос електрощитка в квартиру": {"category": "Послуги", "price": 2700},
-        "Установка світильників в ступені, бетон": {"category": "Послуги", "price": 515},
-        "Установка світильників ґрунтових (без бетонної основи)": {"category": "Послуги", "price": 320},
-        "Установка світильників підводних": {"category": "Послуги", "price": 460},
-        "Установка, підключення прожектора для підсвічування будівель": {"category": "Послуги", "price": 440},
-        "Установка світлодіодних світильників": {"category": "Послуги", "price": 250},
-        "Розробка схеми електропроводки": {"category": "Послуги", "price": 170},
-        "Установка врізного або канального вентилятора": {"category": "Послуги", "price": 415},
-        "Прозвонка проводки в приміщенні": {"category": "Послуги", "price": 125},
-        "Монтаж кнопки дзвінка": {"category": "Послуги", "price": 200},
-        "Установка і підключення вхідного дзвінка": {"category": "Послуги", "price": 290},
-        "Монтаж і установка домофона": {"category": "Послуги", "price": 1270},
-        "Монтаж стрічки LED освітлення в коробі": {"category": "Послуги", "price": 250},
-        "Монтаж і підключення рушникосушарки електричного": {"category": "Послуги", "price": 725},
-        "Влаштування отвору під вентилятор": {"category": "Послуги", "price": 545},
-        "Заделка штроби": {"category": "Послуги", "price": 60},
-        "Установка автомата, 3 фази": {"category": "Послуги", "price": 490},
-        "Заміна електричної розетки (демонтаж + монтаж)": {"category": "Послуги", "price": 200},
-        "Установка реле напруги": {"category": "Послуги", "price": 480},
-        "Монтаж і підключення ДБЖ": {"category": "Послуги", "price": 11725},
+        # --- Підкатегорія: Штроблення та отвори ---
+        "Штроблення під проводку в бетоні, глибина штроби 2 см": {"category": "Послуги", "subcategory": "Штроблення та отвори", "price": 200, "unit": "м.пог"},
+        "Штроблення під проводку в цеглі, глибина штроби 2 см": {"category": "Послуги", "subcategory": "Штроблення та отвори", "price": 140, "unit": "м.пог"},
+        "Влаштування ніші (цегла)": {"category": "Послуги", "subcategory": "Штроблення та отвори", "price": 990, "unit": "шт"},
+        "Влаштування ніші (бетон)": {"category": "Послуги", "subcategory": "Штроблення та отвори", "price": 1650, "unit": "шт"},
+        "Вирізка отвору та встановлення распредкоробки (бетон)": {"category": "Послуги", "subcategory": "Штроблення та отвори", "price": 260, "unit": "шт"},
+        "Вирізка отвору та встановлення распредкоробки (цегла)": {"category": "Послуги", "subcategory": "Штроблення та отвори", "price": 190, "unit": "шт"},
+        "Вирізка отвору та встановлення распредкоробки (гіпсокартон)": {"category": "Послуги", "subcategory": "Штроблення та отвори", "price": 150, "unit": "шт"},
+        "Свердління наскрізних отворів у стіні до 25 мм (бетон, цегла)": {"category": "Послуги", "subcategory": "Штроблення та отвори", "price": 160, "unit": "шт"},
+        "Влаштування отвору під вентилятор": {"category": "Послуги", "subcategory": "Штроблення та отвори", "price": 545, "unit": "шт"},
+        "Заделка штроби": {"category": "Послуги", "subcategory": "Штроблення та отвори", "price": 60, "unit": "м.пог"},
+
+        # --- Підкатегорія: Щитки, автомати, лічильники ---
+        "Установка електрощитка": {"category": "Послуги", "subcategory": "Щитки, автомати, лічильники", "price": 700, "unit": "шт"},
+        "Підключення електролічильника": {"category": "Послуги", "subcategory": "Щитки, автомати, лічильники", "price": 660, "unit": "шт"},
+        "Установка автоматів, 1 фаза": {"category": "Послуги", "subcategory": "Щитки, автомати, лічильники", "price": 190, "unit": "шт"},
+        "Установка автомата, 3 фази": {"category": "Послуги", "subcategory": "Щитки, автомати, лічильники", "price": 490, "unit": "шт"},
+        "Встановлення силових вимикачів, ПЗВ": {"category": "Послуги", "subcategory": "Щитки, автомати, лічильники", "price": 340, "unit": "шт"},
+        "Монтаж та підключення стабілізатора напруги": {"category": "Послуги", "subcategory": "Щитки, автомати, лічильники", "price": 1425, "unit": "шт"},
+        "Перенос електрощитка в квартиру": {"category": "Послуги", "subcategory": "Щитки, автомати, лічильники", "price": 2700, "unit": "шт"},
+        "Установка реле напруги": {"category": "Послуги", "subcategory": "Щитки, автомати, лічильники", "price": 480, "unit": "шт"},
+        "Монтаж і підключення ДБЖ": {"category": "Послуги", "subcategory": "Щитки, автомати, лічильники", "price": 11725, "unit": "точка"},
+
+        # --- Підкатегорія: Кабелі та проводка ---
+        "Складання розпредкоробки, розпаювання проводів": {"category": "Послуги", "subcategory": "Кабелі та проводка", "price": 350, "unit": "шт"},
+        "Підведення дроту та його закріплення, відкрите проведення": {"category": "Послуги", "subcategory": "Кабелі та проводка", "price": 45, "unit": "м.пог"},
+        "Підведення дроту та його закріплення, гофротруба тощо": {"category": "Послуги", "subcategory": "Кабелі та проводка", "price": 65, "unit": "м.пог"},
+        "Підведення кабелю перетином вище 4мкв.м., відкрита проводка": {"category": "Послуги", "subcategory": "Кабелі та проводка", "price": 60, "unit": "м.пог"},
+        "Підведення кабелю перетином вище 10 кв.м., відкрита проводка": {"category": "Послуги", "subcategory": "Кабелі та проводка", "price": 80, "unit": "м.пог"},
+        "Монтаж пластикового короба": {"category": "Послуги", "subcategory": "Кабелі та проводка", "price": 70, "unit": "м.пог"},
+        "Влаштування контуру заземлення, комплекс робіт": {"category": "Послуги", "subcategory": "Кабелі та проводка", "price": 7200, "unit": "шт"},
+        "Розробка схеми електропроводки": {"category": "Послуги", "subcategory": "Кабелі та проводка", "price": 170, "unit": "м²"},
+        "Прозвонка проводки в приміщенні": {"category": "Послуги", "subcategory": "Кабелі та проводка", "price": 125, "unit": "м²"},
+        "Монтаж стрічки LED освітлення в коробі": {"category": "Послуги", "subcategory": "Кабелі та проводка", "price": 250, "unit": "м.пог"},
+
+        # --- Підкатегорія: Розетки, вимикачі, коробки ---
+        "Встановлення та підключення розеток та вимикачів": {"category": "Послуги", "subcategory": "Розетки, вимикачі, коробки", "price": 140, "unit": "шт"},
+        "Заміна електричної розетки (демонтаж + монтаж)": {"category": "Послуги", "subcategory": "Розетки, вимикачі, коробки", "price": 200, "unit": "шт"},
+        "Монтаж кнопки дзвінка": {"category": "Послуги", "subcategory": "Розетки, вимикачі, коробки", "price": 200, "unit": "шт"},
+        "Установка і підключення вхідного дзвінка": {"category": "Послуги", "subcategory": "Розетки, вимикачі, коробки", "price": 290, "unit": "шт"},
+        "Монтаж і установка домофона": {"category": "Послуги", "subcategory": "Розетки, вимикачі, коробки", "price": 1270, "unit": "шт"},
+
+        # --- Підкатегорія: Освітлення та прилади ---
+        "Встановлення та підключення стельового світильника Армстронг": {"category": "Послуги", "subcategory": "Освітлення та прилади", "price": 300, "unit": "шт"},
+        "Встановлення люстри": {"category": "Послуги", "subcategory": "Освітлення та прилади", "price": 535, "unit": "шт"},
+        "Монтаж світильника настінного, бра": {"category": "Послуги", "subcategory": "Освітлення та прилади", "price": 345, "unit": "шт"},
+        "Монтаж точкового світильника (без трансформатора)": {"category": "Послуги", "subcategory": "Освітлення та прилади", "price": 240, "unit": "шт"},
+        "Встановлення та підключення трансформатора": {"category": "Послуги", "subcategory": "Освітлення та прилади", "price": 240, "unit": "шт"},
+        "Установка різних датчиків, слаботочка": {"category": "Послуги", "subcategory": "Освітлення та прилади", "price": 250, "unit": "шт"},
+        "Установка світильників в ступені, бетон": {"category": "Послуги", "subcategory": "Освітлення та прилади", "price": 515, "unit": "шт"},
+        "Установка світильників ґрунтових (без бетонної основи)": {"category": "Послуги", "subcategory": "Освітлення та прилади", "price": 320, "unit": "шт"},
+        "Установка світильників підводних": {"category": "Послуги", "subcategory": "Освітлення та прилади", "price": 460, "unit": "шт"},
+        "Установка, підключення прожектора для підсвічування будівель": {"category": "Послуги", "subcategory": "Освітлення та прилади", "price": 440, "unit": "шт"},
+        "Установка світлодіодних світильників": {"category": "Послуги", "subcategory": "Освітлення та прилади", "price": 250, "unit": "шт"},
+        "Установка врізного або канального вентилятора": {"category": "Послуги", "subcategory": "Освітлення та прилади", "price": 415, "unit": "шт"},
+        "Монтаж і підключення рушникосушарки електричного": {"category": "Послуги", "subcategory": "Освітлення та прилади", "price": 725, "unit": "шт"},
+
+        # --- Підкатегорія: Демонтаж та інше ---
+        "Демонтаж силового кабелю": {"category": "Послуги", "subcategory": "Демонтаж та інше", "price": 125, "unit": "м.пог"},
+        "Демонтаж відкритої електропроводки": {"category": "Послуги", "subcategory": "Демонтаж та інше", "price": 20, "unit": "м.пог"},
+        "Демонтаж інших кабелів і проводки, відкритих": {"category": "Послуги", "subcategory": "Демонтаж та інше", "price": 20, "unit": "м.пог"},
+        "Відключення і демонтаж розеток, вимикачів, світильників": {"category": "Послуги", "subcategory": "Демонтаж та інше", "price": 60, "unit": "шт"},
 
         # --- Матеріали ---
-        "Розетка одинарна (склад)": {"category": "Матеріали", "price": 100},
-        "Розетка одинарна (магазин)": {"category": "Матеріали", "price": 300},
-        "Розетка подвійна (склад)": {"category": "Матеріали", "price": 300},
-        "Розетка подвійна (магазин)": {"category": "Матеріали", "price": 500},
-        "Лампа світлодіодна (склад)": {"category": "Матеріали", "price": 150},
-        "Лампа світлодіодна (магазин)": {"category": "Матеріали", "price": 350},
+        "Розетка одинарна (склад)": {"category": "Матеріали", "subcategory": "Складські", "price": 100, "unit": "шт"},
+        "Розетка одинарна (магазин)": {"category": "Матеріали", "subcategory": "Магазинні", "price": 300, "unit": "шт"},
+        "Розетка подвійна (склад)": {"category": "Матеріали", "subcategory": "Складські", "price": 300, "unit": "шт"},
+        "Розетка подвійна (магазин)": {"category": "Матеріали", "subcategory": "Магазинні", "price": 500, "unit": "шт"},
+        "Лампа світлодіодна (склад)": {"category": "Матеріали", "subcategory": "Складські", "price": 150, "unit": "шт"},
+        "Лампа світлодіодна (магазин)": {"category": "Матеріали", "subcategory": "Магазинні", "price": 350, "unit": "шт"},
 
         # --- Інше ---
-        "Виїзд майстра": {"category": "Інше", "price": 500},
+        "Виїзд майстра": {"category": "Інше", "subcategory": "Інше", "price": 500, "unit": "шт"},
 
         # --- Знижки ---
-        "Знижка Пенсіонер": {"category": "Знижки", "price": 200},
-        "Знижка Військовий": {"category": "Знижки", "price": 250},
-        "Знижка постійному клієнту": {"category": "Знижки", "price": 50, "is_percent": False},
-        "Акція вихідного дня": {"category": "Знижки", "price": 100, "is_percent": False},
-        "Знижка ВПО": {"category": "Знижки", "price": 15, "is_percent": True},
+        "Знижка Пенсіонер": {"category": "Знижки", "subcategory": "Знижки", "price": 200, "unit": "грн"},
+        "Знижка Військовий": {"category": "Знижки", "subcategory": "Знижки", "price": 250, "unit": "грн"},
+        "Знижка постійному клієнту": {"category": "Знижки", "subcategory": "Знижки", "price": 50, "is_percent": False, "unit": "грн"},
+        "Акція вихідного дня": {"category": "Знижки", "subcategory": "Знижки", "price": 100, "is_percent": False, "unit": "грн"},
+        "Знижка ВПО": {"category": "Знижки", "subcategory": "Знижки", "price": 15, "is_percent": True, "unit": "%"},
     }
 
 if 'cart' not in st.session_state:
@@ -89,7 +99,6 @@ if 'cart' not in st.session_state:
 if 'confirm_clear_history' not in st.session_state:
     st.session_state.confirm_clear_history = False
 
-# Стан для тимчасового перехоплення додавання товару при нестачі на складі
 if 'pending_split_item' not in st.session_state:
     st.session_state.pending_split_item = None
 
@@ -579,21 +588,33 @@ st.markdown("---")
 categories = ["Послуги", "Матеріали", "Інше", "Знижки"]
 selected_category = st.selectbox("Оберіть категорію:", categories)
 
-filtered_services = {name: data for name, data in st.session_state.services.items() if data["category"] == selected_category}
+# --- БЛОК ІНТЕРФЕЙСУ ВИБОРУ ПОСЛУГ ІЗ ПІДКАТЕГОРІЯМИ ---
+if selected_category == "Послуги":
+    # Збираємо унікальні підкатегорії послуг
+    subcategories = list(set(data["subcategory"] for name, data in st.session_state.services.items() if data["category"] == "Послуги"))
+    subcategories.sort()
+    
+    selected_subcategory = st.selectbox("Оберіть розділ послуг:", subcategories)
+    
+    filtered_services = {name: data for name, data in st.session_state.services.items() if data["category"] == "Послуги" and data["subcategory"] == selected_subcategory}
+else:
+    filtered_services = {name: data for name, data in st.session_state.services.items() if data["category"] == selected_category}
+
 service_options = list(filtered_services.keys())
 
 is_percentage_service = False
+current_unit = "шт"
 if service_options:
-    selected_service = st.selectbox("Оберіть послугу зі списку", service_options)
+    selected_service = st.selectbox("Оберіть позицію зі списку", service_options)
     service_data = filtered_services[selected_service]
     current_price = float(service_data["price"])
     is_percentage_service = service_data.get("is_percent", False)
+    current_unit = service_data.get("unit", "шт")
 else:
     selected_service = None
     current_price = 0.0
     st.info("У цій категорії поки немає позицій.")
 
-# ПЕРЕВІРКА ІНФОРМАЦІЇ ПРО СКЛАД (якщо обрано матеріал зі складу)
 available_stock_qty = None
 if selected_category == "Матеріали" and selected_service and "(склад)" in selected_service.lower():
     df_stock_check = load_warehouse_stock()
@@ -604,7 +625,9 @@ if selected_category == "Матеріали" and selected_service and "(скла
         else:
             st.warning(f"⚠️ **На складі в наявності:** 0 шт. (Товар повністю закінчився, буде додано з магазину)")
 
-qty = st.number_input("Кількість / Години", min_value=0.1, value=1.0, step=0.5)
+# Динамічний підпис кількості залежно від одиниці виміру у прайсі
+qty_label = f"Кількість ({current_unit})" if current_unit != "м²" else "Площа (м²)"
+qty = st.number_input(qty_label, min_value=0.1, value=1.0, step=0.5)
 
 if selected_category == "Знижки":
     if is_percentage_service:
@@ -614,9 +637,6 @@ if selected_category == "Знижки":
 else:
     price = st.number_input("Ціна за одиницю (грн)", min_value=0.0, value=current_price, step=10.0)
 
-# =========================================================================
-# ІНТЕРАКТИВНЕ ПЕРЕХОПЛЕННЯ ПРИ НЕСТАЧІ НА СКЛАДІ (SMART SPLIT)
-# =========================================================================
 if st.session_state.pending_split_item is not None:
     p_item = st.session_state.pending_split_item
     st.warning(f"⚠️ **На складі є лише {p_item['stock_qty']} шт. «{p_item['mat_name']}».** Ви запросили {p_item['requested_qty']} шт.")
@@ -625,18 +645,17 @@ if st.session_state.pending_split_item is not None:
     col_sp1, col_sp2 = st.columns(2)
     with col_sp1:
         if st.button("🛒 Розділити: залишок зі складу + решта з магазину"):
-            # 1. Додаємо позицію зі складу (скільки є)
             stock_part_total = p_item['stock_qty'] * p_item['stock_price']
             st.session_state.cart.append({
                 "name": p_item['mat_name'],
                 "category": "Матеріали",
                 "price": p_item['stock_price'],
                 "qty": float(p_item['stock_qty']),
+                "unit": "шт",
                 "total": stock_part_total,
                 "is_pct": False
             })
             
-            # 2. Додаємо решту як аналогічний матеріал з магазину
             shop_mat_name = p_item['mat_name'].replace("(склад)", "(магазин)")
             shop_price = st.session_state.services.get(shop_mat_name, {}).get("price", p_item['stock_price'] * 3)
             diff_qty = p_item['requested_qty'] - p_item['stock_qty']
@@ -647,6 +666,7 @@ if st.session_state.pending_split_item is not None:
                 "category": "Матеріали",
                 "price": shop_price,
                 "qty": float(diff_qty),
+                "unit": "шт",
                 "total": shop_part_total,
                 "is_pct": False
             })
@@ -663,6 +683,7 @@ if st.session_state.pending_split_item is not None:
                 "category": "Матеріали",
                 "price": p_item['stock_price'],
                 "qty": float(p_item['stock_qty']),
+                "unit": "шт",
                 "total": stock_part_total,
                 "is_pct": False
             })
@@ -674,9 +695,8 @@ if st.session_state.pending_split_item is not None:
         st.session_state.pending_split_item = None
         st.rerun()
         
-    st.stop() # Зупиняємо рендеринг нижньої частини, поки майстер не зробить вибір
+    st.stop()
 
-# КНОПКА ДОДАТИ ДО ЧЕКА
 if st.button("Додати до чека", type="primary"):
     if not selected_service:
         st.error("Оберіть позицію зі списку.")
@@ -685,14 +705,12 @@ if st.button("Додати до чека", type="primary"):
         if selected_category == "Знижки" and already_has_discount:
             st.error("❌ У чеку вже є знижка!")
         else:
-            # Перевірка наявності на складі при спробі додати матеріал зі складу
             if selected_category == "Матеріали" and selected_service and "(склад)" in selected_service.lower():
                 df_stock_check = load_warehouse_stock()
                 if selected_service in df_stock_check["Матеріал"].values:
                     stk_qty = int(df_stock_check.loc[df_stock_check["Матеріал"] == selected_service, "Залишок (шт)"].values[0])
                     if qty > stk_qty:
                         if stk_qty > 0:
-                            # Запускаємо сценарій розбиття (Smart Split)
                             st.session_state.pending_split_item = {
                                 "mat_name": selected_service,
                                 "stock_qty": stk_qty,
@@ -701,7 +719,6 @@ if st.button("Додати до чека", type="primary"):
                             }
                             st.rerun()
                         else:
-                            # Якщо на складі 0, автоматично пропонуємо додати як магазинну версію
                             shop_mat_name = selected_service.replace("(склад)", "(магазин)")
                             shop_price = st.session_state.services.get(shop_mat_name, {}).get("price", price * 3)
                             st.session_state.cart.append({
@@ -709,6 +726,7 @@ if st.button("Додати до чека", type="primary"):
                                 "category": "Матеріали",
                                 "price": shop_price,
                                 "qty": qty,
+                                "unit": "шт",
                                 "total": qty * shop_price,
                                 "is_pct": False
                             })
@@ -729,6 +747,7 @@ if st.button("Додати до чека", type="primary"):
                 "category": selected_category,
                 "price": item_price, 
                 "qty": qty, 
+                "unit": current_unit,
                 "total": total,
                 "is_pct": (selected_category == "Знижки" and is_percentage_service)
             })
@@ -757,6 +776,7 @@ if st.session_state.cart:
             "category": item['category'],
             "price_display": item_display_price,
             "qty": item['qty'],
+            "unit": item.get('unit', 'шт'),
             "total": item_total
         })
         grand_total += item_total
@@ -764,7 +784,7 @@ if st.session_state.cart:
     for i, item in enumerate(calculated_cart):
         col_item_info, col_item_del = st.columns([5, 1])
         with col_item_info:
-            st.write(f"**{i+1}. [{item['category']}] {item['name']}** — {item['qty']} од. x {item['price_display']} = **{item['total']} грн**")
+            st.write(f"**{i+1}. [{item['category']}] {item['name']}** — {item['qty']} {item['unit']} x {item['price_display']} = **{item['total']} грн**")
         with col_item_del:
             if st.button("❌", key=f"del_item_{i}"):
                 st.session_state.cart.pop(i)
@@ -820,19 +840,19 @@ if st.session_state.cart:
                     
                     if "пенсіонер" in status_lower:
                         if st.button("👵 Застосувати Знижка Пенсіонер"):
-                            st.session_state.cart.append({"name": "Знижка Пенсіонер", "category": "Знижки", "price": -200, "qty": 1.0, "total": -200, "is_pct": False})
+                            st.session_state.cart.append({"name": "Знижка Пенсіонер", "category": "Знижки", "price": -200, "qty": 1.0, "unit": "грн", "total": -200, "is_pct": False})
                             st.rerun()
                     elif "військовий" in status_lower:
                         if st.button("🪖 Застосувати Знижка Військовий"):
-                            st.session_state.cart.append({"name": "Знижка Військовий", "category": "Знижки", "price": -250, "qty": 1.0, "total": -250, "is_pct": False})
+                            st.session_state.cart.append({"name": "Знижка Військовий", "category": "Знижки", "price": -250, "qty": 1.0, "unit": "грн", "total": -250, "is_pct": False})
                             st.rerun()
                     elif "впо" in status_lower:
                         if st.button("💙💛 Застосувати Знижка ВПО"):
-                            st.session_state.cart.append({"name": "Знижка ВПО (15%)", "category": "Знижки", "price": -15, "qty": 1.0, "total": -15, "is_pct": True})
+                            st.session_state.cart.append({"name": "Знижка ВПО (15%)", "category": "Знижки", "price": -15, "qty": 1.0, "unit": "%", "total": -15, "is_pct": True})
                             st.rerun()
                     elif client_visits_count >= 2 or "постійний" in status_lower:
                         if st.button("🎁 Застосувати Знижка постійному клієнту"):
-                            st.session_state.cart.append({"name": "Знижка постійному клієнту", "category": "Знижки", "price": -50, "qty": 1.0, "total": -50, "is_pct": False})
+                            st.session_state.cart.append({"name": "Знижка постійному клієнту", "category": "Знижки", "price": -50, "qty": 1.0, "unit": "грн", "total": -50, "is_pct": False})
                             st.rerun()
                 else:
                     st.info("✅ Знижка вже застосована до цього чека.")
@@ -882,7 +902,6 @@ if st.session_state.cart:
                         df_clients = df_clients.drop(columns=["ЧистийТелефон"])
                     df_clients.to_excel(clients_file, index=False)
                 
-                # --- АВТОМАТИЧНЕ СПИСАННЯ МАТЕРІАЛІВ ЗІ СКЛАДУ ПРИ ЗБЕРЕЖЕННІ ЧЕКА ---
                 update_warehouse_after_sale(st.session_state.cart)
                 
                 next_receipt_num = 1
@@ -900,7 +919,7 @@ if st.session_state.cart:
                 new_rows = [{
                     "№ чека": next_receipt_num, "Час": now, "Майстер": master_name, "Телефон клієнта": cleaned_phone,
                     "Ім'я клієнта": cleaned_name, "Категорія": item['category'], "Послуга/Позиція": item['name'],
-                    "Кількість": item['qty'], "Ціна за од. / Значення": item['price_display'], "Сума (грн)": item['total']
+                    "Кількість": f"{item['qty']} {item.get('unit', 'шт')}", "Ціна за од. / Значення": item['price_display'], "Сума (грн)": item['total']
                 } for item in calculated_cart]
                 
                 new_rows.append({
