@@ -798,14 +798,14 @@ with quick_col5:
 
 qty = st.session_state.current_qty
 
-# ЦІНА ЗА ОДИНИЦЮ — повертаємо у стандартний, звичний та зручний вигляд без будь-яких зайвих експериментів
+# ЦІНА ЗА ОДИНИЦЮ — з унікальними ключами, щоб уникнути дублювання ID
 if selected_category == "Знижки":
     if is_percentage_service:
-        price = st.number_input("Знижка у відсотках (%)", min_value=0.0, max_value=100.0, value=current_price, step=1.0)
+        price = st.number_input("Знижка у відсотках (%)", min_value=0.0, max_value=100.0, value=current_price, step=1.0, key="price_discount_percent")
     else:
-        price = st.number_input("Сума знижки (грн)", min_value=0.0, value=current_price, step=10.0)
+        price = st.number_input("Сума знижки (грн)", min_value=0.0, value=current_price, step=10.0, key="price_discount_uah")
 else:
-    price = st.number_input("Ціна за одиницю (грн)", min_value=0.0, value=current_price, step=10.0)
+    price = st.number_input("Ціна за одиницю (грн)", min_value=0.0, value=current_price, step=10.0, key="price_regular_service")
 
 qty = st.session_state.current_qty
 
