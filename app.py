@@ -686,7 +686,7 @@ if selected_category == "Послуги":
         subcategories = list(set(data["subcategory"] for name, data in st.session_state.services.items() if data["category"] == "Послуги" and data["field"] == selected_field))
         subcategories.sort()
         
-        # 🔘 Кнопки вибору розділу (підкатегорії) замість випадаючого списку
+        # 🔘 Кнопки вибору розділу (підкатегорії)
         selected_subcategory = st.pills("Оберіть розділ:", subcategories, default=subcategories[0] if subcategories else None)
         
         if selected_subcategory:
@@ -724,84 +724,9 @@ if selected_category == "Матеріали" and selected_service and "(скла
             st.warning(f"⚠️ **На складі в наявності:** 0 шт. (Товар повністю закінчився, буде додано з магазину)")
 
 qty_label = f"Кількість ({current_unit})" if current_unit != "м²" else "Площа (м²)"
-# --- ІНІЦІАЛІЗАЦІЯ КІЛЬКОСТІ В SESSION_STATE ---
-if 'current_qty' not in st.session_state:
-    st.session_state.current_qty = 1.0
-
-st.markdown(f"**Кількість ({current_unit}):**")
-
-# CSS для повного приховування стандартних стрілочок/плюсів/мінусів у number_input кількості
-st.markdown("""
-    <style>
-    /* Ховаємо стрілочки для вводу кількості */
-    input[aria-label="Кількість_чисто"]::-webkit-outer-spin-button,
-    input[aria-label="Кількість_чисто"]::-webkit-inner-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-    }
-    input[aria-label="Кількість_чисто"] {
-        text-align: center !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-# Блок управління кількістю: Кнопка мінус | Поле | Кнопка плюс
-q_col1, q_col2, q_col3 = st.columns([1, 2, 1])
-
-with q_col1:
-    if st.button("➖", use_container_width=True, key="btn_minus"):
-        st.session_state.current_qty = max(0.1, round(st.session_state.current_qty - 0.5, 2))
-        st.rerun()
-
-with q_col2:
-    # Використовуємо number_input із callback/збереженням у session_state для миттєвої реакції на кнопки
-    qty_input = st.number_input(
-        "Кількість_чисто", 
-        min_value=0.1, 
-        value=float(st.session_state.current_qty), 
-        step=0.5, 
-        label_visibility="collapsed",
-        key="qty_num_input"
-    )
-    if qty_input != st.session_state.current_qty:
-        st.session_state.current_qty = qty_input
-
-with q_col3:
-    if st.button("➕", use_container_width=True, key="btn_plus"):
-        st.session_state.current_qty = round(st.session_state.current_qty + 0.5, 2)
-        st.rerun()
-
-# Швидкі кнопки додавання знизу
-st.markdown("⚡ **Швидке додавання:**")
-quick_col1, quick_col2, quick_col3, quick_col4, quick_col5 = st.columns(5)
-
-with quick_col1:
-    if st.button("+0.1", use_container_width=True, key="q_01"):
-        st.session_state.current_qty = round(st.session_state.current_qty + 0.1, 2)
-        st.rerun()
-with quick_col2:
-    if st.button("+0.5", use_container_width=True, key="q_05"):
-        st.session_state.current_qty = round(st.session_state.current_qty + 0.5, 2)
-        st.rerun()
-with quick_col3:
-    if st.button("+1", use_container_width=True, key="q_1"):
-        st.session_state.current_qty = round(st.session_state.current_qty + 1.0, 2)
-        st.rerun()
-with quick_col4:
-    if st.button("+5", use_container_width=True, key="q_5"):
-        st.session_state.current_qty = round(st.session_state.current_qty + 5.0, 2)
-        st.rerun()
-with quick_col5:
-    if st.button("🔄 Скин.", use_container_width=True, key="q_reset"):
-        st.session_state.current_qty = 1.0
-        st.rerun()
-
-qty = st.session_state.current_qty
-
-qty_label = f"Кількість ({current_unit})" if current_unit != "м²" else "Площа (м²)"
 qty = st.number_input(qty_label, min_value=0.1, value=1.0, step=0.5, key="main_qty_input")
 
-# ЦІНА ЗА ОДИНИЦЮ (один чіткий блок без дублів)
+# ЦІНА ЗА ОДИНИЦЮ (один чистий блок без дублів)
 if selected_category == "Знижки":
     if is_percentage_service:
         price = st.number_input("Знижка у відсотках (%)", min_value=0.0, max_value=100.0, value=current_price, step=1.0, key="price_discount_percent")
@@ -809,96 +734,6 @@ if selected_category == "Знижки":
         price = st.number_input("Сума знижки (грн)", min_value=0.0, value=current_price, step=10.0, key="price_discount_uah")
 else:
     price = st.number_input("Ціна за одиницю (грн)", min_value=0.0, value=current_price, step=10.0, key="price_regular_service")
-
-if st.session_state.pending_split_item is not None:
-    p_item = st.session_state.pending_split_item
-    st.warning(f"⚠️ **На складі є лише {p_item['stock_qty']} шт. «{p_item['mat_name']}».** Ви запросили {p_item['requested_qty']} шт.")
-    st.markdown("Оберіть дію:")
-    
-    col_sp1, col_sp2 = st.columns(2)
-    with col_sp1:
-        if st.button("🛒 Розділити: залишок зі складу + решта з магазину"):
-            stock_part_total = p_item['stock_qty'] * p_item['stock_price']
-            st.session_state.cart.append({
-                "name": p_item['mat_name'], "category": "Матеріали", "price": p_item['stock_price'],
-                "qty": float(p_item['stock_qty']), "unit": "шт", "total": stock_part_total, "is_pct": False
-            })
-            
-            shop_mat_name = p_item['mat_name'].replace("(склад)", "(магазин)")
-            shop_price = st.session_state.services.get(shop_mat_name, {}).get("price", p_item['stock_price'] * 3)
-            diff_qty = p_item['requested_qty'] - p_item['stock_qty']
-            shop_part_total = diff_qty * shop_price
-            
-            st.session_state.cart.append({
-                "name": shop_mat_name, "category": "Матеріали", "price": shop_price,
-                "qty": float(diff_qty), "unit": "шт", "total": shop_part_total, "is_pct": False
-            })
-            st.session_state.pending_split_item = None
-            st.success("🎉 Успішно розділено між складом та магазином і додано до чека!")
-            st.rerun()
-            
-    with col_sp2:
-        if st.button("📦 Взяти тільки те, що є на складі"):
-            stock_part_total = p_item['stock_qty'] * p_item['stock_price']
-            st.session_state.cart.append({
-                "name": p_item['mat_name'], "category": "Матеріали", "price": p_item['stock_price'],
-                "qty": float(p_item['stock_qty']), "unit": "шт", "total": stock_part_total, "is_pct": False
-            })
-            st.session_state.pending_split_item = None
-            st.success("🎉 Додано наявний залишок зі складу до чека!")
-            st.rerun()
-
-    if st.button("✖️ Скасувати додавання"):
-        st.session_state.pending_split_item = None
-        st.rerun()
-        
-    st.stop()
-
-if st.button("Додати до чека", type="primary"):
-    if not selected_service:
-        st.error("Оберіть позицію зі списку.")
-    else:
-        already_has_discount = any(item['category'] == "Знижки" for item in st.session_state.cart)
-        if selected_category == "Знижки" and already_has_discount:
-            st.error("❌ У чеку вже є знижка!")
-        else:
-            if selected_category == "Матеріали" and selected_service and "(склад)" in selected_service.lower():
-                df_stock_check = load_warehouse_stock()
-                if selected_service in df_stock_check["Матеріал"].values:
-                    stk_qty = int(df_stock_check.loc[df_stock_check["Матеріал"] == selected_service, "Залишок (шт)"].values[0])
-                    if qty > stk_qty:
-                        if stk_qty > 0:
-                            st.session_state.pending_split_item = {
-                                "mat_name": selected_service, "stock_qty": stk_qty,
-                                "requested_qty": int(qty), "stock_price": price
-                            }
-                            st.rerun()
-                        else:
-                            shop_mat_name = selected_service.replace("(склад)", "(магазин)")
-                            shop_price = st.session_state.services.get(shop_mat_name, {}).get("price", price * 3)
-                            st.session_state.cart.append({
-                                "name": shop_mat_name, "category": "Матеріали", "price": shop_price,
-                                "qty": qty, "unit": "шт", "total": qty * shop_price, "is_pct": False
-                            })
-                            st.warning(f"⚠️ Товар «{selected_service}» на складі закінчився (0 шт.). Автоматично додано як версію з магазину!")
-                            st.rerun()
-
-            if selected_category == "Знижки" and is_percentage_service:
-                item_price = -price
-                item_name_display = f"{selected_service} ({price}%)"
-                total = -price
-            else:
-                item_price = -price if selected_category == "Знижки" else price
-                item_name_display = selected_service
-                total = qty * item_price
-            
-            st.session_state.cart.append({
-                "name": item_name_display, "category": selected_category,
-                "price_display": item_price, "price": item_price, "qty": qty, "unit": current_unit,
-                "total": total, "is_pct": (selected_category == "Знижки" and is_percentage_service)
-            })
-            st.success(f"Додано до чека: {item_name_display}")
-            st.rerun()
 
 if st.session_state.pending_split_item is not None:
     p_item = st.session_state.pending_split_item
