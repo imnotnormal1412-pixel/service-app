@@ -730,7 +730,16 @@ if 'current_qty' not in st.session_state:
 
 st.markdown(f"**Кількість ({current_unit}):**")
 
-# Створюємо компактний блок із кнопками мінус / число / плюс
+# Додаємо трохи CSS, щоб вирівняти текст у центрі та прибрати зайві стрілочки
+st.markdown("""
+    <style>
+    input[type="number"] {
+        text-align: center !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# Створюємо блок: Кнопка мінус (зліва) | Число (по центру) | Кнопка плюс (справа)
 q_col1, q_col2, q_col3 = st.columns([1, 2, 1])
 
 with q_col1:
@@ -739,21 +748,26 @@ with q_col1:
         st.rerun()
 
 with q_col2:
-    # Поле введення або акуратне відображення по центру
-    st.session_state.current_qty = st.number_input(
+    # Використовуємо звичайний текст або акуратне числове поле. 
+    # Щоб не було вбудованих плюсів/мінусів, робимо його через text_input або стилізований number_input
+    entered_str = st.text_input(
         "Кількість", 
-        min_value=0.1, 
-        value=float(st.session_state.current_qty), 
-        step=0.5, 
-        label_visibility="collapsed"
+        value=str(st.session_state.current_qty), 
+        label_visibility="collapsed",
+        key="qty_text_input"
     )
+    try:
+        # Переводимо назад у число, якщо користувач вписав вручну
+        st.session_state.current_qty = float(entered_str.replace(',', '.'))
+    except ValueError:
+        pass
 
 with q_col3:
     if st.button("➕", use_container_width=True, key="btn_plus"):
         st.session_state.current_qty = round(st.session_state.current_qty + 0.5, 2)
         st.rerun()
 
-# Швидкі кнопки додавання знизу (як ти й хотіла: +0.1, +0.5, +1 тощо)
+# Швидкі кнопки додавання знизу
 st.markdown("⚡ **Швидке додавання:**")
 quick_col1, quick_col2, quick_col3, quick_col4, quick_col5 = st.columns(5)
 
@@ -777,6 +791,8 @@ with quick_col5:
     if st.button("🔄 Скин.", use_container_width=True):
         st.session_state.current_qty = 1.0
         st.rerun()
+
+qty = st.session_state.current_qty
 
 qty = st.session_state.current_qty
 
