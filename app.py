@@ -670,24 +670,29 @@ with col_stat2:
 
 st.markdown("---")
 
-# 🔘 ІНТЕРФЕЙС НА КНОПКАХ (ПІГУЛКАХ) ДЛЯ КАТЕГОРІЙ
+# 🔘 КНОПКИ ДЛЯ КАТЕГОРІЙ
 categories = ["Послуги", "Матеріали", "Інше", "Знижки"]
 selected_category = st.pills("Оберіть категорію:", categories, default="Послуги")
 
-# ЛОГІКА ВИБОРУ ДЛЯ ПОСЛУГ (ІЗ КНОПКАМИ НАПРЯМІВ)
+# ЛОГІКА ВИБОРУ ДЛЯ ПОСЛУГ (КНОПКИ НАПРЯМІВ + КНОПКИ РОЗДІЛІВ)
 if selected_category == "Послуги":
     available_fields = list(set(data["field"] for name, data in st.session_state.services.items() if data["category"] == "Послуги"))
     available_fields.sort()
     
-    # 🔘 Кнопки вибору напряму робіт
+    # 🔘 Кнопки вибору напряму
     selected_field = st.pills("Оберіть напрям робіт:", available_fields, default=available_fields[0] if available_fields else None)
     
     if selected_field:
         subcategories = list(set(data["subcategory"] for name, data in st.session_state.services.items() if data["category"] == "Послуги" and data["field"] == selected_field))
         subcategories.sort()
-        selected_subcategory = st.selectbox("Оберіть розділ:", subcategories)
         
-        filtered_services = {name: data for name, data in st.session_state.services.items() if data["category"] == "Послуги" and data["field"] == selected_field and data["subcategory"] == selected_subcategory}
+        # 🔘 Кнопки вибору розділу (підкатегорії) замість випадаючого списку
+        selected_subcategory = st.pills("Оберіть розділ:", subcategories, default=subcategories[0] if subcategories else None)
+        
+        if selected_subcategory:
+            filtered_services = {name: data for name, data in st.session_state.services.items() if data["category"] == "Послуги" and data["field"] == selected_field and data["subcategory"] == selected_subcategory}
+        else:
+            filtered_services = {}
     else:
         filtered_services = {}
 else:
@@ -706,7 +711,7 @@ if service_options:
 else:
     selected_service = None
     current_price = 0.0
-    st.info("У цій категорії поки немає позицій.")
+    st.info("У цій категорії поки немає позицій (або оберіть усі фільтри вище).")
 
 available_stock_qty = None
 if selected_category == "Матеріали" and selected_service and "(склад)" in selected_service.lower():
