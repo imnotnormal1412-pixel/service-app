@@ -726,20 +726,20 @@ if selected_category == "Матеріали" and selected_service and "(скла
         else:
             st.warning(f"⚠️ **На складі в наявності:** 0 шт. (Товар повністю закінчився, буде додано з магазину)")
 
-# --- КАСТОМНИЙ БЛОК КІЛЬКОСТІ З КНОПКАМИ ---
+# --- НАДІЙНИЙ ІНТЕРАКТИВНИЙ БЛОК КІЛЬКОСТІ ---
 st.markdown(f"**Кількість ({current_unit}):**")
 
 qc1, qc2, qc3 = st.columns([1, 2, 1])
+
 with qc1:
     if st.button("➖", use_container_width=True, key="btn_minus_custom"):
         st.session_state.item_qty = max(0.1, round(st.session_state.item_qty - 0.5, 2))
         st.rerun()
+
 with qc2:
-    entered_qty_str = st.text_input("Кількість", value=str(st.session_state.item_qty), label_visibility="collapsed", key="qty_txt_box")
-    try:
-        st.session_state.item_qty = float(entered_qty_str.replace(',', '.'))
-    except ValueError:
-        pass
+    # Виводимо поточне значення яскраво по центру без полів вводу, що ламаються
+    st.markdown(f"<h3 style='text-align: center; margin: 0;'>{st.session_state.item_qty}</h3>", unsafe_allow_html=True)
+
 with qc3:
     if st.button("➕", use_container_width=True, key="btn_plus_custom"):
         st.session_state.item_qty = round(st.session_state.item_qty + 0.5, 2)
