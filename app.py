@@ -724,7 +724,61 @@ if selected_category == "Матеріали" and selected_service and "(скла
             st.warning(f"⚠️ **На складі в наявності:** 0 шт. (Товар повністю закінчився, буде додано з магазину)")
 
 qty_label = f"Кількість ({current_unit})" if current_unit != "м²" else "Площа (м²)"
-qty = st.number_input(qty_label, min_value=0.1, value=1.0, step=0.5)
+# --- ІНІЦІАЛІЗАЦІЯ КІЛЬКОСТІ В SESSION_STATE ---
+if 'current_qty' not in st.session_state:
+    st.session_state.current_qty = 1.0
+
+st.markdown(f"**Кількість ({current_unit}):**")
+
+# Створюємо компактний блок із кнопками мінус / число / плюс
+q_col1, q_col2, q_col3 = st.columns([1, 2, 1])
+
+with q_col1:
+    if st.button("➖", use_container_width=True, key="btn_minus"):
+        st.session_state.current_qty = max(0.1, round(st.session_state.current_qty - 0.5, 2))
+        st.rerun()
+
+with q_col2:
+    # Поле введення або акуратне відображення по центру
+    st.session_state.current_qty = st.number_input(
+        "Кількість", 
+        min_value=0.1, 
+        value=float(st.session_state.current_qty), 
+        step=0.5, 
+        label_visibility="collapsed"
+    )
+
+with q_col3:
+    if st.button("➕", use_container_width=True, key="btn_plus"):
+        st.session_state.current_qty = round(st.session_state.current_qty + 0.5, 2)
+        st.rerun()
+
+# Швидкі кнопки додавання знизу (як ти й хотіла: +0.1, +0.5, +1 тощо)
+st.markdown("⚡ **Швидке додавання:**")
+quick_col1, quick_col2, quick_col3, quick_col4, quick_col5 = st.columns(5)
+
+with quick_col1:
+    if st.button("+0.1", use_container_width=True):
+        st.session_state.current_qty = round(st.session_state.current_qty + 0.1, 2)
+        st.rerun()
+with quick_col2:
+    if st.button("+0.5", use_container_width=True):
+        st.session_state.current_qty = round(st.session_state.current_qty + 0.5, 2)
+        st.rerun()
+with quick_col3:
+    if st.button("+1", use_container_width=True):
+        st.session_state.current_qty = round(st.session_state.current_qty + 1.0, 2)
+        st.rerun()
+with quick_col4:
+    if st.button("+5", use_container_width=True):
+        st.session_state.current_qty = round(st.session_state.current_qty + 5.0, 2)
+        st.rerun()
+with quick_col5:
+    if st.button("🔄 Скин.", use_container_width=True):
+        st.session_state.current_qty = 1.0
+        st.rerun()
+
+qty = st.session_state.current_qty
 
 if selected_category == "Знижки":
     if is_percentage_service:
