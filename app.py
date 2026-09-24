@@ -114,6 +114,9 @@ if 'confirm_clear_history' not in st.session_state:
 if 'pending_split_item' not in st.session_state:
     st.session_state.pending_split_item = None
 
+if 'item_qty' not in st.session_state:
+    st.session_state.item_qty = 1.0
+
 # =========================================================================
 # 2. РОБОТА З БАЗОЮ КЛІЄНТІВ, СКЛАДОМ ТА ІСТОРІЄЮ
 # =========================================================================
@@ -723,10 +726,52 @@ if selected_category == "Матеріали" and selected_service and "(скла
         else:
             st.warning(f"⚠️ **На складі в наявності:** 0 шт. (Товар повністю закінчився, буде додано з магазину)")
 
-qty_label = f"Кількість ({current_unit})" if current_unit != "м²" else "Площа (м²)"
-qty = st.number_input(qty_label, min_value=0.1, value=1.0, step=0.5, key="main_qty_input")
+# --- КАСТОМНИЙ БЛОК КІЛЬКОСТІ З КНОПКАМИ ---
+st.markdown(f"**Кількість ({current_unit}):**")
 
-# ЦІНА ЗА ОДИНИЦЮ (один чистий блок без дублів)
+qc1, qc2, qc3 = st.columns([1, 2, 1])
+with qc1:
+    if st.button("➖", use_container_width=True, key="btn_minus_custom"):
+        st.session_state.item_qty = max(0.1, round(st.session_state.item_qty - 0.5, 2))
+        st.rerun()
+with qc2:
+    entered_qty_str = st.text_input("Кількість", value=str(st.session_state.item_qty), label_visibility="collapsed", key="qty_txt_box")
+    try:
+        st.session_state.item_qty = float(entered_qty_str.replace(',', '.'))
+    except ValueError:
+        pass
+with qc3:
+    if st.button("➕", use_container_width=True, key="btn_plus_custom"):
+        st.session_state.item_qty = round(st.session_state.item_qty + 0.5, 2)
+        st.rerun()
+
+# Швидкі кнопки додавання кількості
+st.markdown("⚡ **Швидке додавання:**")
+sc1, sc2, sc3, sc4, sc5 = st.columns(5)
+with sc1:
+    if st.button("+0.1", use_container_width=True, key="sq_01"):
+        st.session_state.item_qty = round(st.session_state.item_qty + 0.1, 2)
+        st.rerun()
+with sc2:
+    if st.button("+0.5", use_container_width=True, key="sq_05"):
+        st.session_state.item_qty = round(st.session_state.item_qty + 0.5, 2)
+        st.rerun()
+with sc3:
+    if st.button("+1", use_container_width=True, key="sq_1"):
+        st.session_state.item_qty = round(st.session_state.item_qty + 1.0, 2)
+        st.rerun()
+with sc4:
+    if st.button("+5", use_container_width=True, key="sq_5"):
+        st.session_state.item_qty = round(st.session_state.item_qty + 5.0, 2)
+        st.rerun()
+with sc5:
+    if st.button("🔄 Скин.", use_container_width=True, key="sq_reset"):
+        st.session_state.item_qty = 1.0
+        st.rerun()
+
+qty = st.session_state.item_qty
+
+# ЦІНА ЗА ОДИНИЦЮ (один чистий блок без дублів у звичному вигляді)
 if selected_category == "Знижки":
     if is_percentage_service:
         price = st.number_input("Знижка у відсотках (%)", min_value=0.0, max_value=100.0, value=current_price, step=1.0, key="price_discount_percent")
