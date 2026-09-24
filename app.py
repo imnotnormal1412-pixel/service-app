@@ -730,16 +730,22 @@ if 'current_qty' not in st.session_state:
 
 st.markdown(f"**Кількість ({current_unit}):**")
 
-# Додаємо трохи CSS, щоб вирівняти текст у центрі та прибрати зайві стрілочки
+# CSS для повного приховування стандартних стрілочок/плюсів/мінусів у number_input кількості
 st.markdown("""
     <style>
-    input[type="number"] {
+    /* Ховаємо стрілочки для вводу кількості */
+    input[aria-label="Кількість_чисто"]::-webkit-outer-spin-button,
+    input[aria-label="Кількість_чисто"]::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+    input[aria-label="Кількість_чисто"] {
         text-align: center !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# Створюємо блок: Кнопка мінус (зліва) | Число (по центру) | Кнопка плюс (справа)
+# Блок управління кількістю: Кнопка мінус | Поле | Кнопка плюс
 q_col1, q_col2, q_col3 = st.columns([1, 2, 1])
 
 with q_col1:
@@ -748,19 +754,17 @@ with q_col1:
         st.rerun()
 
 with q_col2:
-    # Використовуємо звичайний текст або акуратне числове поле. 
-    # Щоб не було вбудованих плюсів/мінусів, робимо його через text_input або стилізований number_input
-    entered_str = st.text_input(
-        "Кількість", 
-        value=str(st.session_state.current_qty), 
+    # Використовуємо number_input із callback/збереженням у session_state для миттєвої реакції на кнопки
+    qty_input = st.number_input(
+        "Кількість_чисто", 
+        min_value=0.1, 
+        value=float(st.session_state.current_qty), 
+        step=0.5, 
         label_visibility="collapsed",
-        key="qty_text_input"
+        key="qty_num_input"
     )
-    try:
-        # Переводимо назад у число, якщо користувач вписав вручну
-        st.session_state.current_qty = float(entered_str.replace(',', '.'))
-    except ValueError:
-        pass
+    if qty_input != st.session_state.current_qty:
+        st.session_state.current_qty = qty_input
 
 with q_col3:
     if st.button("➕", use_container_width=True, key="btn_plus"):
@@ -772,25 +776,36 @@ st.markdown("⚡ **Швидке додавання:**")
 quick_col1, quick_col2, quick_col3, quick_col4, quick_col5 = st.columns(5)
 
 with quick_col1:
-    if st.button("+0.1", use_container_width=True):
+    if st.button("+0.1", use_container_width=True, key="q_01"):
         st.session_state.current_qty = round(st.session_state.current_qty + 0.1, 2)
         st.rerun()
 with quick_col2:
-    if st.button("+0.5", use_container_width=True):
+    if st.button("+0.5", use_container_width=True, key="q_05"):
         st.session_state.current_qty = round(st.session_state.current_qty + 0.5, 2)
         st.rerun()
 with quick_col3:
-    if st.button("+1", use_container_width=True):
+    if st.button("+1", use_container_width=True, key="q_1"):
         st.session_state.current_qty = round(st.session_state.current_qty + 1.0, 2)
         st.rerun()
 with quick_col4:
-    if st.button("+5", use_container_width=True):
+    if st.button("+5", use_container_width=True, key="q_5"):
         st.session_state.current_qty = round(st.session_state.current_qty + 5.0, 2)
         st.rerun()
 with quick_col5:
-    if st.button("🔄 Скин.", use_container_width=True):
+    if st.button("🔄 Скин.", use_container_width=True, key="q_reset"):
         st.session_state.current_qty = 1.0
         st.rerun()
+
+qty = st.session_state.current_qty
+
+# ЦІНА ЗА ОДИНИЦЮ — повертаємо у стандартний, звичний та зручний вигляд без будь-яких зайвих експериментів
+if selected_category == "Знижки":
+    if is_percentage_service:
+        price = st.number_input("Знижка у відсотках (%)", min_value=0.0, max_value=100.0, value=current_price, step=1.0)
+    else:
+        price = st.number_input("Сума знижки (грн)", min_value=0.0, value=current_price, step=10.0)
+else:
+    price = st.number_input("Ціна за одиницю (грн)", min_value=0.0, value=current_price, step=10.0)
 
 qty = st.session_state.current_qty
 
